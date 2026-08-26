@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import axios from 'axios';
 import { 
   HardHat, ArrowRight, Play, BarChart3, Users, Package, 
-  Truck, CalendarDays, Shield, LayoutDashboard, X, CheckCircle2,
+  Truck, CalendarDays, Shield, LayoutDashboard, CheckCircle2,
   AlertCircle // <-- Ícone de alerta importado
 } from 'lucide-react';
 import BuildingModel from '../components/3d/BuildingModel';
@@ -32,14 +32,9 @@ const modules = [
 
 export default function LandingPage({ usuario }) { 
   const [formCadastro, setFormCadastro] = useState({ nome: '', email: '', senha: '', nivel: 'comum' });
-  const [modalResetAberto, setModalResetAberto] = useState(false);
-  const [emailReset, setEmailReset] = useState('');
-  
   const [statusCadastro, setStatusCadastro] = useState('');
   const [erroCadastro, setErroCadastro] = useState(''); // <-- NOVO ESTADO PARA GUARDAR A MENSAGEM DO BACK-END
   
-  const [statusReset, setStatusReset] = useState('');
-
   const lenis = useLenis();
 
   const scrollToSection = (targetId) => {
@@ -67,15 +62,6 @@ export default function LandingPage({ usuario }) {
       // Se a API não mandar nada estruturado, exibe um erro genérico
       setErroCadastro(err.response?.data?.error || 'Erro ao conectar com o servidor.');
     }
-  };
-
-  const handleRequestReset = async (e) => {
-    e.preventDefault();
-    setStatusReset('enviando');
-    try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/forgot-password`, { email: emailReset });
-      setStatusReset('sucesso');
-    } catch (err) { setStatusReset('erro'); }
   };
 
   return (
@@ -270,7 +256,7 @@ export default function LandingPage({ usuario }) {
                       {statusCadastro === 'processando' ? 'Processando...' : 'Criar Conta de Teste'}
                     </button>
                     <div className="text-center mt-2">
-                      <button type="button" onClick={() => { setStatusReset(''); setModalResetAberto(true); }} className="btn btn-sm text-secondary border-0 bg-transparent shadow-none small">Esqueceu sua senha?</button>
+                      <Link to="/login?recover=1" className="btn btn-sm text-secondary border-0 bg-transparent shadow-none small">Esqueceu sua senha?</Link>
                     </div>
                   </form>
                 )}
@@ -303,39 +289,6 @@ export default function LandingPage({ usuario }) {
             </div>
           </footer>
         </div>
-
-        {/* === MODAL DE RECUPERAÇÃO DE SENHA === */}
-        {modalResetAberto && (
-          <div className="d-flex align-items-center justify-content-center" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 3000 }}>
-            <div className="card p-4 border w-100 mx-3" style={{ backgroundColor: '#151518', maxWidth: '420px', borderRadius: '16px', color: '#FFFFFF', borderColor: 'rgba(38, 38, 41, 0.6)' }}>
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 className="fw-bold m-0 text-white d-flex align-items-center gap-2"> Recuperar Acesso</h5>
-                <button onClick={() => setModalResetAberto(false)} className="btn p-0 text-secondary border-0 bg-transparent shadow-none"><X size={20} /></button>
-              </div>
-              <p className="text-secondary small mb-4">Insira seu e-mail cadastrado para enviarmos as instruções de redefinição.</p>
-
-              {statusReset === 'sucesso' ? (
-                <div className="alert border-0 text-success bg-success bg-opacity-10 small mb-2 p-3">
-                  ✓ Link enviado! Verifique sua caixa de entrada.
-                </div>
-              ) : (
-                <form onSubmit={handleRequestReset} className="d-flex flex-column gap-3">
-                  <div>
-                    <label className="form-label small text-secondary mb-1">E-mail Cadastrado</label>
-                    <input type="email" required placeholder="exemplo@houzen.com" className="form-control text-white border-0 py-2 shadow-none" style={{ backgroundColor: '#0F0F11', border: '1px solid rgba(38, 38, 41, 0.6)' }} value={emailReset} onChange={e => setEmailReset(e.target.value)} />
-                  </div>
-                  {statusReset === 'erro' && <div className="text-danger small">E-mail não localizado.</div>}
-                  <div className="d-flex gap-2 justify-content-end mt-2">
-                    <button type="button" onClick={() => setModalResetAberto(false)} className="btn btn-sm px-3 py-2 text-white border-0" style={{ backgroundColor: 'rgba(38, 38, 41, 0.6)' }}>Fechar</button>
-                    <button type="submit" disabled={statusReset === 'enviando'} className="btn btn-sm px-3 py-2 text-black border-0 fw-semibold" style={{ backgroundColor: '#F97316' }}>
-                      {statusReset === 'enviando' ? 'Enviando...' : 'Disparar Recuperação'}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          </div>
-        )}
 
       </div>
     </ReactLenis>

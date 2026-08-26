@@ -14,9 +14,9 @@ function normalizePermissions(value) {
   }
 }
 
-function signUserToken(userId) {
+function signUserToken(userId, sessionVersion = 0) {
   return jwt.sign(
-    {},
+    { sv: Number(sessionVersion) },
     process.env.JWT_SECRET,
     {
       algorithm: 'HS256',
@@ -47,12 +47,16 @@ async function requireAuth(req, res, next) {
     }
 
     const { rows } = await db.query(
-      'SELECT id, nome, email, nivel, status, permissoes FROM usuarios WHERE id = $1 LIMIT 1',
+      'SELECT id, nome, email, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version FROM usuarios WHERE id = $1 LIMIT 1',
       [payload.sub]
     );
     const user = rows[0];
     if (!user || String(user.status || '').toLowerCase().trim() !== 'ativo') {
       return res.status(401).json({ error: 'SessÃ£o invÃ¡lida ou conta inativa.' });
+    }
+
+    if (!Number.isInteger(payload.sv) || payload.sv !== user.session_version) {
+      return res.status(401).json({ error: 'Sessao revogada. Entre novamente.' });
     }
 
     req.user = {
@@ -70,11 +74,34 @@ async function requireAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (req.user?.nivel !== 'admin' && req.user?.nivel !== 'administrador') {
+  if (!['admin', 'administrador', 'superadmin'].includes(req.user?.nivel)) {
     return res.status(403).json({ error: 'PermissÃ£o de administrador obrigatÃ³ria.' });
   }
   return next();
 }
 
-module.exports = { requireAuth, requireAdmin, signUserToken, normalizePermissions };
+function requireSuperAdmin(req, res, next) {
+  if (req.user?.nivel !== 'superadmin') {
+    return res.status(403).json({ error: 'Permissao de SuperAdmin obrigatoria.' });
+  }
+  return next();
+}
 
+function requirePasswordChangeCompleted(req, res, next) {
+  if (req.user?.must_change_password === true) {
+    return res.status(403).json({
+      error: 'Troque a senha temporaria antes de acessar o sistema.',
+      code: 'PASSWORD_CHANGE_REQUIRED'
+    });
+  }
+  return next();
+}
+
+module.exports = {
+  requireAuth,
+  requireAdmin,
+  requireSuperAdmin,
+  requirePasswordChangeCompleted,
+  signUserToken,
+  normalizePermissions
+};

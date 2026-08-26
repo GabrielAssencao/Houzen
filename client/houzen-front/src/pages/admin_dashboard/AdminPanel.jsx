@@ -1,8 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Shield, UserX, UserCheck, Edit2, X, Save, Key, Trash2, List, PlusCircle, Building } from 'lucide-react';
+import PasswordResetRequestsPanel from './PasswordResetRequestsPanel';
 
-export default function AdminPanel() {
+const API_URL = import.meta.env.VITE_API_URL || 'https://houzen-back.onrender.com';
+
+function getAuthHeader() {
+  const userStorage = localStorage.getItem('@Houzen:user');
+  if (!userStorage) return {};
+  const user = JSON.parse(userStorage);
+  return { headers: { Authorization: `Bearer ${user.token}` } };
+}
+
+export default function AdminPanel({ usuario }) {
   const [usuarios, setUsuarios] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [abaAtiva, setAbaAtiva] = useState('listagem');
@@ -13,6 +23,7 @@ export default function AdminPanel() {
 
   // Estado para novo cadastro
   const [novoUser, setNovoUser] = useState({ nome: '', email: '', senha: '', nivel: 'empresa' });
+  const isSuperAdmin = usuario?.nivel === 'superadmin';
 
   // Lista mestre de módulos do sistema
   const modulosDisponiveis = [
@@ -24,20 +35,7 @@ export default function AdminPanel() {
     { id: 'cronograma', nome: 'Cronograma Físico' }
   ];
 
-  // Configuração Global da API e Header
-  const API_URL = import.meta.env.VITE_API_URL || 'https://houzen-back.onrender.com';
-
-  const getAuthHeader = () => {
-    const userStorage = localStorage.getItem('@Houzen:user');
-    if (userStorage) {
-      const user = JSON.parse(userStorage);
-      // Mantemos o padrão do seu header que o backend espera
-      return { headers: { Authorization: `Bearer ${user.token}` } };
-    }
-    return {};
-  };
-
-  const carregarUsuarios = async () => {
+  const carregarUsuarios = useCallback(async () => {
     try {
       const res = await axios.get(`${API_URL}/api/auth/admin/usuarios`, getAuthHeader());
       // Garante que se o banco estiver limpo ou retornar vazio, o estado não quebre
@@ -47,9 +45,9 @@ export default function AdminPanel() {
       console.error('Erro ao buscar usuários', err);
       setCarregando(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { carregarUsuarios(); }, []);
+  useEffect(() => { carregarUsuarios(); }, [carregarUsuarios]);
 
   const abrirModalEdicao = (user) => {
     let permissoesArray;
@@ -109,6 +107,7 @@ export default function AdminPanel() {
         <div className="d-flex gap-2 p-1 rounded-3" style={{ backgroundColor: '#151518' }}>
           <button onClick={() => setAbaAtiva('listagem')} className={`btn btn-sm px-3 py-2 border-0 ${abaAtiva === 'listagem' ? 'text-black fw-bold' : 'text-secondary'}`} style={{ backgroundColor: abaAtiva === 'listagem' ? '#F97316' : 'transparent', borderRadius: '6px' }}><List size={16} className="me-1"/> Listagem</button>
           <button onClick={() => setAbaAtiva('cadastro')} className={`btn btn-sm px-3 py-2 border-0 ${abaAtiva === 'cadastro' ? 'text-black fw-bold' : 'text-secondary'}`} style={{ backgroundColor: abaAtiva === 'cadastro' ? '#F97316' : 'transparent', borderRadius: '6px' }}><PlusCircle size={16} className="me-1"/> Nova Empresa</button>
+          {isSuperAdmin && <button onClick={() => setAbaAtiva('recuperacao')} className={`btn btn-sm px-3 py-2 border-0 ${abaAtiva === 'recuperacao' ? 'text-black fw-bold' : 'text-secondary'}`} style={{ backgroundColor: abaAtiva === 'recuperacao' ? '#F97316' : 'transparent', borderRadius: '6px' }}><Key size={16} className="me-1"/> Recuperações</button>}
         </div>
       </div>
 
@@ -146,14 +145,14 @@ export default function AdminPanel() {
                           ) : (
                             <span className="badge px-2 py-1 bg-danger bg-opacity-10 text-danger small fw-normal"><UserX size={12} className="me-1"/> Bloqueada</span>
                           )}
-                          {user.nivel === 'admin' && (
-                             <span className="badge px-2 py-1 bg-warning text-black small fw-bold">ADMINISTRADOR</span>
+                          {['admin', 'superadmin'].includes(user.nivel) && (
+                             <span className="badge px-2 py-1 bg-warning text-black small fw-bold">{user.nivel === 'superadmin' ? 'SUPERADMIN' : 'ADMINISTRADOR'}</span>
                           )}
                         </div>
                       </td>
                       <td className="text-center">
                         {/* PROTEÇÃO: Botões não aparecem para o Admin Houzen */}
-                        {user.nivel !== 'admin' && (
+                        {(isSuperAdmin || !['admin', 'superadmin'].includes(user.nivel)) && (
                           <>
                             <button onClick={() => abrirModalEdicao(user)} className="btn p-1 border-0 bg-transparent text-secondary shadow-none" title="Editar Permissões"><Key size={18} /></button>
                             <button onClick={() => deletarUsuario(user.id)} className="btn p-1 border-0 bg-transparent text-danger shadow-none" title="Excluir"><Trash2 size={18} /></button>
@@ -167,7 +166,7 @@ export default function AdminPanel() {
             </div>
           )}
         </div>
-      ) : (
+      ) : abaAtiva === 'cadastro' ? (
         /* ABA DE CADASTRO */
         <div className="card p-4 border-0 rounded-4" style={{ backgroundColor: '#151518', maxWidth: '500px' }}>
           <h5 className="text-white mb-4"><Building className="text-warning me-2" size={20}/> Dados da Nova Empresa</h5>
@@ -213,6 +212,8 @@ export default function AdminPanel() {
             </button>
           </form>
         </div>
+      ) : (
+        <PasswordResetRequestsPanel />
       )}
 
       {/* MODAL DE EDIÇÃO */}
@@ -237,6 +238,19 @@ export default function AdminPanel() {
                   <option value="bloqueado">Bloqueado (Inadimplente / Suspenso)</option>
                 </select>
               </div>
+
+              {isSuperAdmin && (
+                <div>
+                  <label className="form-label small text-secondary mb-1">Perfil de acesso</label>
+                  <select className="form-select text-white border-0 py-2 shadow-none" style={{ backgroundColor: '#0F0F11', border: '1px solid rgba(38, 38, 41, 0.6)' }} value={usuarioEdit.nivel} onChange={e => setUsuarioEdit({...usuarioEdit, nivel: e.target.value})}>
+                    <option value="comum">Usuário comum</option>
+                    <option value="empresa">Empresa</option>
+                    <option value="operador">Operador</option>
+                    <option value="admin">Administrador</option>
+                    <option value="superadmin">SuperAdmin</option>
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="form-label small text-secondary mb-2 mt-2">Módulos Contratados (Liberados)</label>

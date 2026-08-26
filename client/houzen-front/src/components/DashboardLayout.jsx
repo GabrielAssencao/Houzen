@@ -9,6 +9,7 @@ export default function DashboardLayout({ usuario, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [recolhido, setRecolhido] = React.useState(false);
+  const isAdmin = ['admin', 'administrador', 'superadmin'].includes(usuario?.nivel);
 
   // Mapeamento: ID (igual ao do banco) vs Nome (visível)
   const todosModulos = [
@@ -23,7 +24,7 @@ export default function DashboardLayout({ usuario, onLogout }) {
     if (!usuario) return false;
     
     // Admin não precisa renderizar os módulos operacionais no menu principal dele
-    if (usuario.nivel === 'admin') return false; 
+    if (isAdmin) return false;
     
     // Verifica se o ID do módulo está na lista de permissões da empresa
     const permissoes = Array.isArray(usuario.permissoes) ? usuario.permissoes : [];
@@ -47,7 +48,7 @@ export default function DashboardLayout({ usuario, onLogout }) {
           </div>
 
           <nav className="nav flex-column gap-1">
-            {usuario?.nivel === 'admin' ? (
+            {isAdmin ? (
               <>
                 {/* LINKS EXCLUSIVOS DO ADMIN */}
                 <Link to="/dashboard/admin" className="nav-link d-flex align-items-center gap-3 rounded-3 px-3 py-2.5 transition-all text-decoration-none" style={{ backgroundColor: location.pathname === '/dashboard/admin' ? '#F97316' : 'transparent', color: location.pathname === '/dashboard/admin' ? '#000000' : '#F97316', fontWeight: '600' }}>

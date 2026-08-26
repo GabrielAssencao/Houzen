@@ -8,7 +8,7 @@ Plataforma full-stack para gerenciamento de obras, equipes, suprimentos, frotas 
 - **API:** Node.js 20+ e Express, preparada para publicação no Render.
 - **Banco de dados:** PostgreSQL gerenciado pelo Supabase e acessado exclusivamente pela API.
 - **Autenticação com Google:** Firebase Authentication, com validação do token de ID no backend.
-- **E-mails:** Resend para o envio das mensagens de recuperação de senha.
+- **Recuperação de acesso:** fluxo manual auditável, processado por um perfil `superadmin`.
 
 ```text
 client/houzen-front       React/Vite
@@ -43,13 +43,15 @@ Preencha as variáveis descritas em [`server/houzen-back/.env.example`](server/h
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Para tornar a primeira conta administradora, registre uma conta normalmente. Depois, execute o comando abaixo no SQL Editor, substituindo o e-mail pelo endereço correto:
+Para tornar a primeira conta SuperAdmin, registre uma conta normalmente. Depois, execute o comando abaixo no SQL Editor, substituindo o e-mail pelo endereço correto:
 
 ```sql
 UPDATE usuarios
-SET nivel = 'admin'
+SET nivel = 'superadmin'
 WHERE lower(email) = lower('voce@exemplo.com');
 ```
+
+Mantenha poucas contas com esse perfil. Um `superadmin` possui as permissões administrativas e também pode processar solicitações de recuperação de acesso.
 
 ### 3. Frontend
 
@@ -64,15 +66,20 @@ No Windows PowerShell, use `Copy-Item .env.example .env` no lugar de `cp`.
 
 Configure apenas as variáveis públicas com o prefixo `VITE_*`, conforme descrito em [`client/houzen-front/.env.example`](client/houzen-front/.env.example). A variável `VITE_API_URL` deve conter somente a origem da API, sem `/api/auth` no final.
 
-## Configuração do Resend
+## Recuperação manual de acesso
 
-Valide um domínio no Resend e defina a variável `RESEND_FROM`. Por exemplo:
+O usuário solicita a recuperação informando o e-mail cadastrado e um contato por WhatsApp ou e-mail alternativo. A resposta pública é sempre genérica para não revelar se uma conta existe.
 
-```env
-RESEND_FROM=Houzen <no-reply@seudominio.com>
-```
+O contato informado no formulário público não comprova a identidade do solicitante. Antes de gerar qualquer senha, o SuperAdmin deve confirmar a pessoa por um canal independente e registrar essa verificação no painel. Depois disso, pode rejeitar o pedido ou gerar uma senha temporária. A senha:
 
-O remetente de testes `onboarding@resend.dev` não é apropriado para uma aplicação pública. A recuperação de senha utiliza um token aleatório; somente seu hash é armazenado no banco de dados. O token expira em 30 minutos e pode ser usado apenas uma vez.
+- é exibida uma única vez ao SuperAdmin;
+- é armazenada no banco somente como hash bcrypt;
+- expira após 24 horas;
+- deve ser enviada ao usuário por um canal externo;
+- bloqueia o acesso aos módulos até o usuário cadastrar uma nova senha;
+- não pode ser reutilizada como a nova senha definitiva.
+
+As variáveis `RESEND_API_KEY` e `RESEND_FROM` permanecem reservadas para uma futura integração de notificações e não são necessárias para esse fluxo.
 
 ## Publicação
 
@@ -102,7 +109,8 @@ Adicione o domínio final da Vercel à variável `FRONTEND_URLS` no backend e à
 - O token do Firebase é verificado por assinatura, emissor, audiência e prazo de validade.
 - As consultas validam a propriedade dos recursos para impedir o acesso entre contas diferentes.
 - As senhas são protegidas com bcrypt.
-- A recuperação de senha não expõe identificadores nem confirma se um endereço de e-mail está cadastrado.
+- A recuperação de senha não confirma se um endereço está cadastrado e só pode ser processada por um SuperAdmin.
+- Contas com senha temporária não acessam os módulos até concluírem a troca obrigatória.
 - O CORS utiliza uma lista de origens permitidas.
 - Helmet, limite de tamanho do corpo das requisições e limitação de frequência estão habilitados.
 - Os papéis (`roles`) `anon` e `authenticated` do Supabase não têm acesso às tabelas da aplicação, pois todos os dados passam pela API.

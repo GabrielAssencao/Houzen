@@ -4,7 +4,7 @@ import axios from 'axios';
 
 import LandingPage from './pages/LandingPage';
 import Login from './pages/login';
-import ResetPassword from './pages/ResetPassword';
+import ChangeTemporaryPassword from './pages/ChangeTemporaryPassword';
 
 // Layout e Sub-páginas do Dashboard
 import DashboardLayout from './components/DashboardLayout';
@@ -20,6 +20,9 @@ const RotaProtegida = ({ usuario, children }) => {
   if (!usuario) {
     return <Navigate to="/login" replace />;
   }
+  if (usuario.mustChangePassword) {
+    return <Navigate to="/change-temporary-password" replace />;
+  }
   return children;
 };
 
@@ -29,7 +32,7 @@ export default function App() {
 
   // Verifica se é admin
   const isUserAdmin = () => {
-    return usuario?.nivel === 'admin';
+    return ['admin', 'administrador', 'superadmin'].includes(usuario?.nivel);
   };
 
   useEffect(() => {
@@ -94,12 +97,21 @@ export default function App() {
           path="/login" 
           element={
             usuario 
-              ? <Navigate to={isUserAdmin() ? "/dashboard/admin" : "/dashboard"} replace /> 
+              ? <Navigate to={usuario.mustChangePassword ? "/change-temporary-password" : (isUserAdmin() ? "/dashboard/admin" : "/dashboard")} replace />
               : <Login onLoginSucesso={handleLoginSucesso} />
           } 
         />
 
-        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route
+          path="/change-temporary-password"
+          element={
+            !usuario
+              ? <Navigate to="/login" replace />
+              : usuario.mustChangePassword
+                ? <ChangeTemporaryPassword usuario={usuario} onPasswordChanged={handleLoginSucesso} />
+                : <Navigate to={isUserAdmin() ? "/dashboard/admin" : "/dashboard"} replace />
+          }
+        />
 
         <Route 
           element={
@@ -116,7 +128,7 @@ export default function App() {
           
           <Route 
             path="/dashboard/admin" 
-            element={isUserAdmin() ? <AdminPanel /> : <Navigate to="/dashboard" replace />} 
+            element={isUserAdmin() ? <AdminPanel usuario={usuario} /> : <Navigate to="/dashboard" replace />}
           />
           <Route 
             path="/dashboard/admin-datamanagement" 

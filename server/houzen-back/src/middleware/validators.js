@@ -31,7 +31,41 @@ const validarRegistro = [
 ];
 
 const validarForgotPassword = [
+  body('contactType').isIn(['whatsapp', 'email']).withMessage('tipo de contato invalido'),
+  body('contact')
+    .if(body('contactType').equals('email'))
+    .trim()
+    .isEmail()
+    .withMessage('e-mail de contato invalido')
+    .normalizeEmail()
+    .custom((value, { req }) => {
+      if (value.toLowerCase() === String(req.body.email || '').trim().toLowerCase()) {
+        throw new Error('informe um e-mail alternativo diferente do cadastrado');
+      }
+      return true;
+    }),
+  body('contact')
+    .if(body('contactType').equals('whatsapp'))
+    .customSanitizer((value) => String(value || '').replace(/\D/g, ''))
+    .isLength({ min: 10, max: 15 })
+    .isNumeric()
+    .withMessage('WhatsApp invalido'),
   body('email').trim().isEmail().withMessage('e-mail invÃ¡lido').normalizeEmail(),
+  handleValidationErrors
+];
+
+const validarTrocaSenhaTemporaria = [
+  body('novaSenha').isString().isLength({ min: 8, max: 72 }).withMessage('senha precisa ter entre 8 e 72 caracteres'),
+  handleValidationErrors
+];
+
+const validarRejeicaoReset = [
+  body('reason').optional().trim().isLength({ max: 500 }).withMessage('motivo muito longo'),
+  handleValidationErrors
+];
+
+const validarResolucaoReset = [
+  body('verificationNote').trim().isLength({ min: 10, max: 500 }).withMessage('descreva como a identidade foi verificada'),
   handleValidationErrors
 ];
 
@@ -132,7 +166,7 @@ const validarUsuarioEmpresa = [
 ];
 
 const validarAcessoUsuario = [
-  body('nivel').isIn(['comum', 'admin', 'empresa', 'operador']),
+  body('nivel').isIn(['comum', 'admin', 'superadmin', 'empresa', 'operador']),
   body('status').isIn(['ativo', 'inativo', 'suspenso']),
   body('permissoes').isArray({ max: 20 }),
   body('permissoes.*').isString().isLength({ min: 1, max: 50 }),
@@ -189,6 +223,9 @@ module.exports = {
   validarLogin,
   validarRegistro,
   validarForgotPassword,
+  validarTrocaSenhaTemporaria,
+  validarRejeicaoReset,
+  validarResolucaoReset,
   validarResetPassword,
   validarGoogleLogin,
   validarObra,

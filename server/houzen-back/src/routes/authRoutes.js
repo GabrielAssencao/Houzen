@@ -1,7 +1,12 @@
 const express = require('express');
 
 const authController = require('../controllers/authController');
-const { requireAdmin, requireAuth } = require('../middleware/auth');
+const {
+  requireAdmin,
+  requireAuth,
+  requireSuperAdmin,
+  requirePasswordChangeCompleted
+} = require('../middleware/auth');
 const {
   authLimiter,
   passwordResetLimiter,
@@ -12,7 +17,9 @@ const {
   validarLogin,
   validarRegistro,
   validarForgotPassword,
-  validarResetPassword,
+  validarTrocaSenhaTemporaria,
+  validarRejeicaoReset,
+  validarResolucaoReset,
   validarGoogleLogin,
   validarObra,
   validarFuncionario,
@@ -34,14 +41,15 @@ const {
 const router = express.Router();
 
 router.post('/usuarios/registrar_teste', registrationLimiter, validarRegistro, authController.registrarUsuarioTeste);
-router.post('/forgot-password', passwordResetLimiter, validarForgotPassword, authController.forgotPassword);
-router.put('/reset-password', authLimiter, validarResetPassword, authController.resetPassword);
+router.post('/forgot-password', passwordResetLimiter, validarForgotPassword, authController.requestPasswordReset);
 router.post('/login', authLimiter, validarLogin, authController.login);
 router.post('/google', authLimiter, validarGoogleLogin, authController.googleLogin);
 
 router.use(requireAuth);
 
 router.get('/session', authController.getSession);
+router.put('/change-temporary-password', authLimiter, validarTrocaSenhaTemporaria, authController.changeTemporaryPassword);
+router.use(requirePasswordChangeCompleted);
 router.get('/dashboard/resumo', authController.getDashboardResumo);
 
 router.get('/rh/funcionarios', authController.getFuncionarios);
@@ -73,6 +81,9 @@ router.put('/obras/:id', validarIdParam, validarObra, authController.editarObra)
 router.delete('/obras/:id', validarIdParam, authController.deletarObra);
 
 router.use('/admin', requireAdmin);
+router.get('/admin/password-reset-requests', requireSuperAdmin, authController.listPasswordResetRequests);
+router.post('/admin/password-reset-requests/:id/resolve', requireSuperAdmin, validarIdParam, validarResolucaoReset, authController.resolvePasswordResetRequest);
+router.put('/admin/password-reset-requests/:id/reject', requireSuperAdmin, validarIdParam, validarRejeicaoReset, authController.rejectPasswordResetRequest);
 router.get('/admin/usuarios', authController.listarUsuariosAdmin);
 router.post('/admin/usuarios', validarUsuarioEmpresa, authController.criarUsuarioEmpresa);
 router.get('/admin/usuarios/:id/obras', validarIdParam, authController.getObrasAdmin);

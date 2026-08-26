@@ -8,9 +8,20 @@ process.env.FIREBASE_PROJECT_ID ||= 'houzen-test';
 const express = require('express');
 const jwt = require('jsonwebtoken');
 
-const { signUserToken } = require('../src/middleware/auth');
+const db = require('../src/config/db');
+const {
+  signUserToken,
+  requireAuth,
+  requireSuperAdmin,
+  requirePasswordChangeCompleted
+} = require('../src/middleware/auth');
 const { verifyFirebaseIdToken } = require('../src/config/firebase');
-const { validarRegistro, validarResetPassword } = require('../src/middleware/validators');
+const {
+  validarForgotPassword,
+  validarIdParam,
+  validarRegistro,
+  validarResolucaoReset
+} = require('../src/middleware/validators');
 const authRoutes = require('../src/routes/authRoutes');
 
 let server;
@@ -20,7 +31,8 @@ before(async () => {
   const app = express();
   app.use(express.json());
   app.post('/register', validarRegistro, (_req, res) => res.sendStatus(204));
-  app.put('/reset', validarResetPassword, (_req, res) => res.sendStatus(204));
+  app.post('/forgot', validarForgotPassword, (_req, res) => res.sendStatus(204));
+  app.post('/resolve/:id', validarIdParam, validarResolucaoReset, (_req, res) => res.sendStatus(204));
   app.use('/api/auth', authRoutes);
   await new Promise((resolve) => {
     server = app.listen(0, '127.0.0.1', resolve);
@@ -40,6 +52,40 @@ test('token de sessÃ£o restringe algoritmo, emissor e audiÃªncia', () => {
     audience: 'houzen-web'
   });
   assert.equal(payload.sub, '42');
+  assert.equal(payload.sv, 0);
+});
+
+test('reset revoga tokens emitidos com uma versao de sessao anterior', async () => {
+  const originalQuery = db.query;
+  db.query = async () => ({
+    rows: [{
+      id: 42,
+      nome: 'Teste',
+      email: 'teste@example.com',
+      nivel: 'comum',
+      status: 'ativo',
+      permissoes: [],
+      must_change_password: true,
+      temporary_password_expires_at: new Date(Date.now() + 60_000),
+      session_version: 2
+    }]
+  });
+  const token = signUserToken(42, 1);
+  const req = { get: () => `Bearer ${token}` };
+  const res = {
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; }
+  };
+  let nextCalled = false;
+  try {
+    await requireAuth(req, res, () => { nextCalled = true; });
+  } finally {
+    db.query = originalQuery;
+  }
+  assert.equal(res.statusCode, 401);
+  assert.equal(nextCalled, false);
 });
 
 test('token Firebase com algoritmo simÃ©trico Ã© rejeitado antes da rede', async () => {
@@ -62,13 +108,64 @@ test('cadastro pÃºblico nÃ£o permite escolher nÃ­vel admin', async () => {
   assert.equal(response.status, 400);
 });
 
-test('reset antigo baseado apenas em ID Ã© rejeitado', async () => {
-  const response = await fetch(`${baseUrl}/reset`, {
-    method: 'PUT',
+test('pedido de recuperacao exige um contato valido', async () => {
+  const response = await fetch(`${baseUrl}/forgot`, {
+    method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id: 1, novaSenha: 'SenhaForte123' })
+    body: JSON.stringify({ email: 'teste@example.com' })
   });
   assert.equal(response.status, 400);
+});
+
+test('pedido de recuperacao exige e-mail alternativo diferente do cadastrado', async () => {
+  const response = await fetch(`${baseUrl}/forgot`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      email: 'teste@example.com',
+      contactType: 'email',
+      contact: 'teste@example.com'
+    })
+  });
+  assert.equal(response.status, 400);
+});
+
+test('administrador comum nao passa pela autorizacao de SuperAdmin', () => {
+  const req = { user: { nivel: 'admin' } };
+  const res = {
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; }
+  };
+  let nextCalled = false;
+  requireSuperAdmin(req, res, () => { nextCalled = true; });
+  assert.equal(res.statusCode, 403);
+  assert.equal(nextCalled, false);
+});
+
+test('geracao de senha exige registro da verificacao de identidade', async () => {
+  const response = await fetch(`${baseUrl}/resolve/1`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({})
+  });
+  assert.equal(response.status, 400);
+});
+
+test('senha temporaria bloqueia acesso aos modulos ate ser substituida', () => {
+  const req = { user: { must_change_password: true } };
+  const res = {
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; }
+  };
+  let nextCalled = false;
+  requirePasswordChangeCompleted(req, res, () => { nextCalled = true; });
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.code, 'PASSWORD_CHANGE_REQUIRED');
+  assert.equal(nextCalled, false);
 });
 
 test('header usuario-id forjado nÃ£o autentica uma rota privada', async () => {

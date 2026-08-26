@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Mail, Lock, AlertCircle, LogIn, CheckCircle2, ArrowLeft, KeyRound } from 'lucide-react';
-import { useNavigate } from 'react-router-dom'; 
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, provider } from '../services/firebase'; 
@@ -9,14 +9,17 @@ export default function Login({ onLoginSucesso }) {
   let API_URL = import.meta.env.VITE_API_URL || 'https://houzen-back.onrender.com';
   const baseUrl = API_URL.replace(/\/api\/auth\/?$/, '').replace(/\/+$/, '');
 
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
   const [carregando, setCarregando] = useState(false);
 
-  const [modoRecuperacao, setModoRecuperacao] = useState(false);
+  const [modoRecuperacao, setModoRecuperacao] = useState(searchParams.get('recover') === '1');
   const [emailRecuperacao, setEmailRecuperacao] = useState('');
+  const [tipoContato, setTipoContato] = useState('whatsapp');
+  const [contatoRecuperacao, setContatoRecuperacao] = useState('');
   const [statusRecuperacao, setStatusRecuperacao] = useState(''); 
 
   const canvasRef = useRef(null);
@@ -102,7 +105,7 @@ export default function Login({ onLoginSucesso }) {
     const formas = Array.from({ length: 12 }, () => new FormaGeometrica());
 
     const renderizar = () => {
-      ctx.fillStyle = cores.fundo; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#09090B'; ctx.fillRect(0, 0, canvas.width, canvas.height);
       formas.forEach(forma => { forma.atualizar(); forma.desenhar(); });
       for (let i = 0; i < particulas.length; i++) {
         particulas[i].atualizar(); particulas[i].desenhar();
@@ -138,7 +141,8 @@ export default function Login({ onLoginSucesso }) {
       setSucesso(`Bem-vindo, ${dados.nome}!`);
       
       const nivel = dados.nivel?.toLowerCase().trim();
-      const destino = (nivel === 'admin' || nivel === 'administrador') ? '/dashboard/admin' : '/dashboard';
+      const isAdmin = ['admin', 'administrador', 'superadmin'].includes(nivel);
+      const destino = dados.mustChangePassword ? '/change-temporary-password' : (isAdmin ? '/dashboard/admin' : '/dashboard');
 
       setTimeout(() => {
         onLoginSucesso(dados);
@@ -151,7 +155,7 @@ export default function Login({ onLoginSucesso }) {
       } else if (error.response?.status === 401) {
         setErro('E-mail ou senha incorretos.');
       } else if (error.response?.status === 403) {
-        setErro('Conta inativa ou suspensa.');
+        setErro(error.response?.data?.message || 'Conta inativa ou suspensa.');
       } else {
         setErro(error.response?.data?.message || 'Erro de conexão com o servidor.');
       }
@@ -174,7 +178,8 @@ export default function Login({ onLoginSucesso }) {
       onLoginSucesso(dados);
       
       const nivel = dados.nivel?.toLowerCase().trim();
-      const destino = (nivel === 'admin' || nivel === 'administrador') ? '/dashboard/admin' : '/dashboard';
+      const isAdmin = ['admin', 'administrador', 'superadmin'].includes(nivel);
+      const destino = dados.mustChangePassword ? '/change-temporary-password' : (isAdmin ? '/dashboard/admin' : '/dashboard');
       navigate(destino, { replace: true });
     } catch (error) {
       setErro('Falha ao autenticar com Google.');
@@ -188,7 +193,11 @@ export default function Login({ onLoginSucesso }) {
     const endpoint = `${baseUrl}/api/auth/forgot-password`;
     
     try {
-      await axios.post(endpoint, { email: emailRecuperacao });
+      await axios.post(endpoint, {
+        email: emailRecuperacao,
+        contactType: tipoContato,
+        contact: contatoRecuperacao
+      });
       setStatusRecuperacao('sucesso');
     } catch (error) {
       setStatusRecuperacao('erro');
@@ -217,7 +226,7 @@ export default function Login({ onLoginSucesso }) {
             {modoRecuperacao ? 'Recuperar Acesso' : 'Bem-vindo de volta'}
           </h2>
           <p style={{ color: cores.textoSecundario, fontSize: '15px' }}>
-            {modoRecuperacao ? 'Enviaremos instruções para o seu e-mail' : 'Entre na sua conta'}
+            {modoRecuperacao ? 'O suporte analisará sua solicitação e entrará em contato' : 'Entre na sua conta'}
           </p>
         </div>
 
@@ -233,8 +242,8 @@ export default function Login({ onLoginSucesso }) {
             statusRecuperacao === 'sucesso' ? (
               <div className="text-center py-3">
                 <CheckCircle2 size={40} className="text-success mb-3 mx-auto" />
-                <h6 className="text-white fw-bold">Verifique seu e-mail</h6>
-                <p className="small text-secondary mb-4">Se houver uma conta associada a {emailRecuperacao}, enviaremos um link de redefinição.</p>
+                <h6 className="text-white fw-bold">Solicitação registrada</h6>
+                <p className="small text-secondary mb-4">Se os dados corresponderem a uma conta ativa, o suporte enviará uma senha temporária pelo contato informado.</p>
                 <button onClick={() => setModoRecuperacao(false)} className="btn w-100 py-2 fw-semibold" style={{ backgroundColor: 'transparent', border: `1px solid ${cores.borda}`, color: '#FFFFFF' }}>Voltar ao login</button>
               </div>
             ) : (
@@ -244,6 +253,20 @@ export default function Login({ onLoginSucesso }) {
                   <div className="d-flex align-items-center px-3 custom-input" style={{ backgroundColor: cores.inputBg, border: `1px solid ${cores.borda}`, borderRadius: '10px' }}>
                     <Mail size={18} style={{ color: cores.textoSecundario }} />
                     <input type="email" className="form-control text-light py-2 border-0" placeholder="you@example.com" value={emailRecuperacao} onChange={e => setEmailRecuperacao(e.target.value)} required style={{ backgroundColor: 'transparent', boxShadow: 'none' }} />
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-medium small mb-2 text-white">Forma de contato</label>
+                  <select className="form-select text-light border-0" style={{ backgroundColor: cores.inputBg }} value={tipoContato} onChange={e => { setTipoContato(e.target.value); setContatoRecuperacao(''); }}>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="email">E-mail alternativo</option>
+                  </select>
+                </div>
+                <div className="mb-4">
+                  <label className="form-label fw-medium small mb-2 text-white">{tipoContato === 'whatsapp' ? 'Número com DDD' : 'E-mail para contato'}</label>
+                  <div className="d-flex align-items-center px-3 custom-input" style={{ backgroundColor: cores.inputBg, border: `1px solid ${cores.borda}`, borderRadius: '10px' }}>
+                    <Mail size={18} style={{ color: cores.textoSecundario }} />
+                    <input type={tipoContato === 'email' ? 'email' : 'tel'} className="form-control text-light py-2 border-0" placeholder={tipoContato === 'email' ? 'contato@example.com' : '(11) 99999-9999'} value={contatoRecuperacao} onChange={e => setContatoRecuperacao(e.target.value)} required maxLength={tipoContato === 'email' ? 254 : 24} style={{ backgroundColor: 'transparent', boxShadow: 'none' }} />
                   </div>
                 </div>
                 <button type="submit" className="btn w-100 py-2 fw-bold border-0 mb-2" disabled={statusRecuperacao === 'enviando'} style={{ backgroundColor: cores.laranja, borderRadius: '10px', color: '#000000', fontSize: '15px' }}>

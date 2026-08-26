@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "check": "node --check src/index.js && node --check src/controllers/authController.js && node --check src/middleware/auth.js && node --check src/middleware/validators.js && node --check src/routes/authRoutes.js",
+    "check": "node --check src/index.js && node --check src/controllers/authController.js && node --check src/middleware/auth.js && node --check src/middleware/validators.js && node --check src/routes/authRoutes.js && node --check scripts/check-db.js",
     "check:db": "node scripts/check-db.js",
     "test": "node --test"
   },

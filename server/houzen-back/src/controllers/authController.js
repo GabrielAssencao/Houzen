@@ -7,6 +7,7 @@ const { verifyFirebaseIdToken } = require('../config/firebase');
 const { normalizePermissions, signUserToken } = require('../middleware/auth');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const genericManualResetMessage = 'Se os dados corresponderem a uma conta ativa, a solicitacao sera analisada pelo suporte.';
 const genericResetMessage = 'Se o e-mail estiver cadastrado, vocÃª receberÃ¡ as instruÃ§Ãµes em instantes.';
 
 function publicUser(user, token) {
@@ -17,6 +18,8 @@ function publicUser(user, token) {
     email: user.email,
     nivel: nivel === 'administrador' ? 'admin' : nivel,
     permissoes: normalizePermissions(user.permissoes),
+    mustChangePassword: user.must_change_password === true,
+    ...(user.must_change_password === true ? { temporaryPasswordExpiresAt: user.temporary_password_expires_at } : {}),
     ...(token ? { token } : {})
   };
 }
@@ -56,6 +59,48 @@ async function ownsDestination(userId, obraId, sedeId) {
   );
   return rows[0]?.owned === true;
 }
+
+function generateTemporaryPassword(length = 16) {
+  const groups = [
+    'ABCDEFGHJKLMNPQRSTUVWXYZ',
+    'abcdefghijkmnopqrstuvwxyz',
+    '23456789',
+    '!@#$%'
+  ];
+  const characters = groups.map((group) => group[crypto.randomInt(group.length)]);
+  const alphabet = groups.join('');
+  while (characters.length < length) {
+    characters.push(alphabet[crypto.randomInt(alphabet.length)]);
+  }
+  for (let index = characters.length - 1; index > 0; index -= 1) {
+    const swapIndex = crypto.randomInt(index + 1);
+    [characters[index], characters[swapIndex]] = [characters[swapIndex], characters[index]];
+  }
+  return characters.join('');
+}
+
+const requestPasswordReset = async (req, res) => {
+  const { email, contactType, contact } = req.body;
+  try {
+    const { rows } = await db.query(
+      "SELECT id FROM usuarios WHERE lower(email) = lower($1) AND status = 'ativo' LIMIT 1",
+      [email]
+    );
+    const user = rows[0];
+    if (user) {
+      await db.query(
+        `INSERT INTO password_reset_requests (usuario_id, contact_type, contact_value)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (usuario_id) WHERE status = 'pending'
+         DO NOTHING`,
+        [user.id, contactType, contact]
+      );
+    }
+    return res.status(202).json({ message: genericManualResetMessage });
+  } catch (error) {
+    return handleDatabaseError(res, error, 'Erro ao registrar solicitacao de recuperacao');
+  }
+};
 
 const registrarUsuarioTeste = async (req, res) => {
   const { nome, email, senha } = req.body;
@@ -132,7 +177,7 @@ const login = async (req, res) => {
   const { email, senha } = req.body;
   try {
     const { rows } = await db.query(
-      'SELECT id, nome, email, senha, nivel, status, permissoes FROM usuarios WHERE lower(email) = lower($1) LIMIT 1',
+      'SELECT id, nome, email, senha, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version FROM usuarios WHERE lower(email) = lower($1) LIMIT 1',
       [email]
     );
     const user = rows[0];
@@ -142,7 +187,16 @@ const login = async (req, res) => {
       return res.status(403).json({ message: 'Sua conta estÃ¡ suspensa ou inativa.' });
     }
 
-    return res.json(publicUser(user, signUserToken(user.id)));
+    if (user.must_change_password === true && (
+      !user.temporary_password_expires_at || new Date(user.temporary_password_expires_at) <= new Date()
+    )) {
+      return res.status(403).json({
+        message: 'A senha temporaria expirou. Solicite uma nova recuperacao.',
+        code: 'TEMPORARY_PASSWORD_EXPIRED'
+      });
+    }
+
+    return res.json(publicUser(user, signUserToken(user.id, user.session_version)));
   } catch (error) {
     console.error('Erro no login:', error);
     return res.status(500).json({ message: 'Erro interno no login.' });
@@ -183,7 +237,7 @@ const googleLogin = async (req, res) => {
     }
 
     const { rows } = await db.query(
-      `SELECT id, nome, email, firebase_uid, nivel, status, permissoes
+      `SELECT id, nome, email, firebase_uid, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version
        FROM usuarios
        WHERE firebase_uid = $1 OR lower(email) = lower($2)
        LIMIT 1`,
@@ -196,7 +250,7 @@ const googleLogin = async (req, res) => {
       const inserted = await db.query(
         `INSERT INTO usuarios (nome, email, senha, firebase_uid, nivel, status)
          VALUES ($1, $2, $3, $4, 'comum', 'ativo')
-         RETURNING id, nome, email, nivel, status, permissoes`,
+         RETURNING id, nome, email, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version`,
         [decoded.name || 'UsuÃ¡rio Google', decoded.email, senhaInutilizavel, decoded.uid]
       );
       user = inserted.rows[0];
@@ -207,7 +261,7 @@ const googleLogin = async (req, res) => {
     if (String(user.status || '').toLowerCase().trim() !== 'ativo') {
       return res.status(403).json({ message: 'Conta inativa.' });
     }
-    return res.json(publicUser(user, signUserToken(user.id)));
+    return res.json(publicUser(user, signUserToken(user.id, user.session_version)));
   } catch (error) {
     if (error.code === 'FIREBASE_NOT_CONFIGURED') {
       return res.status(503).json({ message: 'Login Google temporariamente indisponÃ­vel.' });
@@ -501,7 +555,7 @@ const deletarCronograma = async (req, res) => {
 
 const listarUsuariosAdmin = async (_req, res) => {
   try {
-    const { rows } = await db.query('SELECT id,nome,email,nivel,status,permissoes FROM usuarios ORDER BY id DESC');
+    const { rows } = await db.query('SELECT id,nome,email,nivel,status,permissoes,must_change_password,temporary_password_expires_at FROM usuarios ORDER BY id DESC');
     return res.json(rows.map((user) => publicUser(user)));
   } catch (error) { return handleDatabaseError(res, error, 'Erro ao listar usuÃ¡rios'); }
 };
@@ -521,7 +575,14 @@ const criarUsuarioEmpresa = async (req, res) => {
 const atualizarAcessoUsuario = async (req, res) => {
   const targetId = Number(req.params.id);
   const { nivel, status, permissoes } = req.body;
-  if (targetId === req.user.id && (nivel !== 'admin' || status !== 'ativo')) {
+  const targetResult = await db.query('SELECT nivel FROM usuarios WHERE id = $1 LIMIT 1', [targetId]);
+  const target = targetResult.rows[0];
+  if (!target) return res.status(404).json({ error: 'Usuario nao encontrado.' });
+  if (req.user.nivel !== 'superadmin' && (target.nivel === 'superadmin' || nivel === 'superadmin')) {
+    return res.status(403).json({ error: 'Somente um SuperAdmin pode alterar este perfil.' });
+  }
+  const ownRequiredLevel = req.user.nivel === 'administrador' ? 'admin' : req.user.nivel;
+  if (targetId === req.user.id && (nivel !== ownRequiredLevel || status !== 'ativo')) {
     return res.status(400).json({ error: 'VocÃª nÃ£o pode remover o prÃ³prio acesso administrativo.' });
   }
   try {
@@ -536,6 +597,12 @@ const atualizarAcessoUsuario = async (req, res) => {
 
 const excluirUsuario = async (req, res) => {
   const targetId = Number(req.params.id);
+  const targetResult = await db.query('SELECT nivel FROM usuarios WHERE id = $1 LIMIT 1', [targetId]);
+  const target = targetResult.rows[0];
+  if (!target) return res.status(404).json({ error: 'Usuario nao encontrado.' });
+  if (target.nivel === 'superadmin' && req.user.nivel !== 'superadmin') {
+    return res.status(403).json({ error: 'Somente um SuperAdmin pode excluir este perfil.' });
+  }
   if (targetId === req.user.id) return res.status(400).json({ error: 'VocÃª nÃ£o pode excluir a prÃ³pria conta.' });
   try {
     const { rowCount } = await db.query('DELETE FROM usuarios WHERE id=$1', [targetId]);
@@ -636,7 +703,118 @@ const popularCronogramaAdmin = async (req, res) => {
   } catch (error) { return handleDatabaseError(res, error, 'Erro ao criar cronograma para empresa'); }
 };
 
+const listPasswordResetRequests = async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.id, r.contact_type, r.contact_value, r.status, r.requested_at,
+              u.id AS usuario_id, u.nome, u.email
+       FROM password_reset_requests r
+       JOIN usuarios u ON u.id = r.usuario_id
+       WHERE r.status = 'pending'
+       ORDER BY r.requested_at ASC`
+    );
+    return res.json(rows);
+  } catch (error) {
+    return handleDatabaseError(res, error, 'Erro ao listar solicitacoes de recuperacao');
+  }
+};
+
+const resolvePasswordResetRequest = async (req, res) => {
+  let client;
+  try {
+    client = await db.connect();
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT r.id, r.usuario_id, r.contact_type, r.contact_value, u.nome, u.email
+       FROM password_reset_requests r
+       JOIN usuarios u ON u.id = r.usuario_id
+       WHERE r.id = $1 AND r.status = 'pending'
+       FOR UPDATE`,
+      [req.params.id]
+    );
+    const request = rows[0];
+    if (!request) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Solicitacao pendente nao encontrada.' });
+    }
+
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+    await client.query(
+      "UPDATE usuarios SET senha = $1, must_change_password = true, temporary_password_expires_at = now() + interval '24 hours', session_version = session_version + 1 WHERE id = $2",
+      [passwordHash, request.usuario_id]
+    );
+    await client.query(
+      `UPDATE password_reset_requests
+       SET status = 'completed', processed_at = now(), processed_by = $1, verification_note = $2
+       WHERE id = $3`,
+      [req.user.id, req.body.verificationNote, request.id]
+    );
+    await client.query('DELETE FROM password_reset_tokens WHERE usuario_id = $1', [request.usuario_id]);
+    await client.query('COMMIT');
+
+    return res.json({
+      requestId: request.id,
+      temporaryPassword,
+      contactType: request.contact_type,
+      contact: request.contact_value,
+      user: { id: request.usuario_id, nome: request.nome, email: request.email }
+    });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    return handleDatabaseError(res, error, 'Erro ao gerar senha temporaria');
+  } finally {
+    client?.release();
+  }
+};
+
+const rejectPasswordResetRequest = async (req, res) => {
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE password_reset_requests
+       SET status = 'rejected', processed_at = now(), processed_by = $1, rejection_reason = $2
+       WHERE id = $3 AND status = 'pending'`,
+      [req.user.id, req.body.reason || null, req.params.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Solicitacao pendente nao encontrada.' });
+    return res.json({ message: 'Solicitacao rejeitada.' });
+  } catch (error) {
+    return handleDatabaseError(res, error, 'Erro ao rejeitar solicitacao de recuperacao');
+  }
+};
+
+const changeTemporaryPassword = async (req, res) => {
+  if (req.user.must_change_password !== true) {
+    return res.status(409).json({ error: 'A conta nao possui troca de senha pendente.' });
+  }
+  try {
+    const current = await db.query('SELECT senha FROM usuarios WHERE id = $1', [req.user.id]);
+    const reused = await bcrypt.compare(req.body.novaSenha, current.rows[0].senha).catch(() => false);
+    if (reused) {
+      return res.status(400).json({ error: 'A nova senha deve ser diferente da senha temporaria.' });
+    }
+
+    const passwordHash = await bcrypt.hash(req.body.novaSenha, 12);
+    const { rows } = await db.query(
+      `UPDATE usuarios
+       SET senha = $1, must_change_password = false, temporary_password_expires_at = NULL, session_version = session_version + 1
+       WHERE id = $2
+       RETURNING id, nome, email, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version`,
+      [passwordHash, req.user.id]
+    );
+    await db.query('DELETE FROM password_reset_tokens WHERE usuario_id = $1', [req.user.id]);
+    return res.json(publicUser(rows[0], signUserToken(req.user.id, rows[0].session_version)));
+  } catch (error) {
+    return handleDatabaseError(res, error, 'Erro ao trocar senha temporaria');
+  }
+};
+
 module.exports = {
+  requestPasswordReset,
+  listPasswordResetRequests,
+  resolvePasswordResetRequest,
+  rejectPasswordResetRequest,
+  changeTemporaryPassword,
   registrarUsuarioTeste,
   forgotPassword,
   login,
