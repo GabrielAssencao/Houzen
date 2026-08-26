@@ -47,7 +47,7 @@ export default function DashboardLayout({ usuario, onLogout, onUserUpdated }) {
             {!recolhido && <span className="fw-bold fs-5 tracking-tight">Houzen</span>}
           </div>
 
-          <nav className="nav flex-column gap-1" aria-label="NavegaÃ§Ã£o principal">
+          <nav className="nav flex-column gap-1" aria-label="Navegação principal">
             {isAdmin ? (
               <>
                 {/* LINKS EXCLUSIVOS DO ADMIN */}
@@ -79,7 +79,7 @@ export default function DashboardLayout({ usuario, onLogout, onUserUpdated }) {
         <div className="d-flex flex-column gap-2">
             {!recolhido && <div className="houzen-user-summary"><UserRound size={18} /><div><strong>{usuario?.nome}</strong><small>{usuario?.email}</small></div></div>}
             <Link to="/dashboard/settings" className={`houzen-nav-link ${location.pathname === '/dashboard/settings' ? 'is-active' : ''}`}>
-              <Settings size={20} /> {!recolhido && <span>ConfiguraÃ§Ãµes</span>}
+              <Settings size={20} /> {!recolhido && <span>Configurações</span>}
             </Link>
             <button onClick={() => setRecolhido(!recolhido)} className="houzen-sidebar-button">
                 {recolhido ? <ChevronRight size={20} /> : <><ChevronLeft size={20} /> <span>Recolher</span></>}

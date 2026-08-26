@@ -4,8 +4,13 @@ import { X } from 'lucide-react';
 export default function ModalDialog({ open, title, description, children, actions, onClose, size = 'md' }) {
   const closeButtonRef = useRef(null);
   const dialogRef = useRef(null);
+  const onCloseRef = useRef(onClose);
   const titleId = useId();
   const descriptionId = useId();
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -16,7 +21,7 @@ export default function ModalDialog({ open, title, description, children, action
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -40,7 +45,7 @@ export default function ModalDialog({ open, title, description, children, action
       document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
