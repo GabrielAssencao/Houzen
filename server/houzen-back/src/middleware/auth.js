@@ -3,6 +3,7 @@ const db = require('../config/db');
 
 const TOKEN_ISSUER = 'houzen-api';
 const TOKEN_AUDIENCE = 'houzen-web';
+const ADMIN_LEVELS = new Set(['admin', 'administrador', 'superadmin']);
 
 function normalizePermissions(value) {
   if (Array.isArray(value)) return value;
@@ -47,12 +48,19 @@ async function requireAuth(req, res, next) {
     }
 
     const { rows } = await db.query(
-      'SELECT id, nome, email, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version FROM usuarios WHERE id = $1 LIMIT 1',
+      'SELECT id, nome, email, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version, theme_preference, account_status_reason FROM usuarios WHERE id = $1 LIMIT 1',
       [payload.sub]
     );
     const user = rows[0];
-    if (!user || String(user.status || '').toLowerCase().trim() !== 'ativo') {
-      return res.status(401).json({ error: 'SessÃ£o invÃ¡lida ou conta inativa.' });
+    if (!user) {
+      return res.status(401).json({ error: 'SessÃ£o invÃ¡lida.' });
+    }
+
+    if (String(user.status || '').toLowerCase().trim() !== 'ativo') {
+      return res.status(403).json({
+        error: user.account_status_reason || 'Conta suspensa. Entre em contato com o suporte.',
+        code: 'ACCOUNT_SUSPENDED'
+      });
     }
 
     if (!Number.isInteger(payload.sv) || payload.sv !== user.session_version) {
@@ -74,10 +82,23 @@ async function requireAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!['admin', 'administrador', 'superadmin'].includes(req.user?.nivel)) {
+  if (!ADMIN_LEVELS.has(req.user?.nivel)) {
     return res.status(403).json({ error: 'PermissÃ£o de administrador obrigatÃ³ria.' });
   }
   return next();
+}
+
+function requireAnyModulePermission(...moduleIds) {
+  return (req, res, next) => {
+    if (ADMIN_LEVELS.has(req.user?.nivel)) return next();
+    const permissions = Array.isArray(req.user?.permissoes) ? req.user.permissoes : [];
+    if (moduleIds.some((moduleId) => permissions.includes(moduleId))) return next();
+    return res.status(403).json({
+      error: 'Este módulo não está liberado para sua conta.',
+      code: 'MODULE_ACCESS_DENIED',
+      requiredPermissions: moduleIds
+    });
+  };
 }
 
 function requireSuperAdmin(req, res, next) {
@@ -102,6 +123,7 @@ module.exports = {
   requireAdmin,
   requireSuperAdmin,
   requirePasswordChangeCompleted,
+  requireAnyModulePermission,
   signUserToken,
   normalizePermissions
 };

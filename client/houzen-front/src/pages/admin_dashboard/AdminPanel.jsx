@@ -1,286 +1,263 @@
-import { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
-import { Shield, UserX, UserCheck, Edit2, X, Save, Key, Trash2, List, PlusCircle, Building } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Building2, Check, CircleDollarSign, KeyRound, List, LockKeyhole,
+  Plus, Save, Search, Shield, Trash2, UserCheck, UsersRound
+} from 'lucide-react';
+import ModalDialog from '../../components/ModalDialog';
+import { useNotifications } from '../../components/notificationContext';
+import { MODULES } from '../../config/modules';
+import api, { getApiError } from '../../services/api';
 import PasswordResetRequestsPanel from './PasswordResetRequestsPanel';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://houzen-back.onrender.com';
+const initialCompany = { nome: '', email: '', senha: '', nivel: 'empresa' };
 
-function getAuthHeader() {
-  const userStorage = localStorage.getItem('@Houzen:user');
-  if (!userStorage) return {};
-  const user = JSON.parse(userStorage);
-  return { headers: { Authorization: `Bearer ${user.token}` } };
+function normalizePermissions(value) {
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 export default function AdminPanel({ usuario }) {
-  const [usuarios, setUsuarios] = useState([]);
-  const [carregando, setCarregando] = useState(true);
-  const [abaAtiva, setAbaAtiva] = useState('listagem');
-  
-  // Controle do Modal de Edição
-  const [modalAberto, setModalAberto] = useState(false);
-  const [usuarioEdit, setUsuarioEdit] = useState(null);
-
-  // Estado para novo cadastro
-  const [novoUser, setNovoUser] = useState({ nome: '', email: '', senha: '', nivel: 'empresa' });
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('accounts');
+  const [search, setSearch] = useState('');
+  const [editingUser, setEditingUser] = useState(null);
+  const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [newCompany, setNewCompany] = useState(initialCompany);
+  const { notify } = useNotifications();
   const isSuperAdmin = usuario?.nivel === 'superadmin';
 
-  // Lista mestre de módulos do sistema
-  const modulosDisponiveis = [
-    { id: 'dashboard', nome: 'Dashboard & Fluxo de Caixa' },
-    { id: 'obras', nome: 'Gestão de Obras' },
-    { id: 'rh', nome: 'Recursos Humanos' },
-    { id: 'suprimentos', nome: 'Suprimentos & Almoxarifado' },
-    { id: 'frota', nome: 'Frota & Equipamentos' },
-    { id: 'cronograma', nome: 'Cronograma Físico' }
-  ];
-
-  const carregarUsuarios = useCallback(async () => {
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/api/auth/admin/usuarios`, getAuthHeader());
-      // Garante que se o banco estiver limpo ou retornar vazio, o estado não quebre
-      setUsuarios(Array.isArray(res.data) ? res.data : []);
-      setCarregando(false);
-    } catch (err) {
-      console.error('Erro ao buscar usuários', err);
-      setCarregando(false);
+      const { data } = await api.get('/api/auth/admin/usuarios');
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      notify({ type: 'error', title: 'Usuários não carregados', message: getApiError(error) });
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [notify]);
 
-  useEffect(() => { carregarUsuarios(); }, [carregarUsuarios]);
+  useEffect(() => { loadUsers(); }, [loadUsers]);
 
-  const abrirModalEdicao = (user) => {
-    let permissoesArray;
-    try {
-      permissoesArray = typeof user.permissoes === 'string' ? JSON.parse(user.permissoes) : user.permissoes;
-    } catch (e) { permissoesArray = []; }
+  const metrics = useMemo(() => ({
+    total: users.filter((item) => !['admin', 'superadmin'].includes(item.nivel)).length,
+    active: users.filter((item) => item.status === 'ativo' && !['admin', 'superadmin'].includes(item.nivel)).length,
+    suspended: users.filter((item) => item.status !== 'ativo').length
+  }), [users]);
 
-    setUsuarioEdit({ ...user, permissoes: permissoesArray || [] });
-    setModalAberto(true);
+  const filteredUsers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return users;
+    return users.filter((item) => `${item.nome} ${item.email} ${item.nivel}`.toLowerCase().includes(term));
+  }, [search, users]);
+
+  const openAccessEditor = (target) => {
+    setEditingUser({
+      ...target,
+      permissoes: normalizePermissions(target.permissoes),
+      statusReason: target.accountStatusReason || ''
+    });
   };
 
-  const deletarUsuario = async (id) => {
-    if (window.confirm("Tem certeza que deseja excluir esta empresa? Esta ação não pode ser desfeita.")) {
-      try {
-        await axios.delete(`${API_URL}/api/auth/admin/usuarios/${id}`, getAuthHeader());
-        carregarUsuarios();
-      } catch (err) { alert('Erro ao excluir usuário'); }
+  const togglePermission = (moduleId) => {
+    setEditingUser((current) => ({
+      ...current,
+      permissoes: current.permissoes.includes(moduleId)
+        ? current.permissoes.filter((permission) => permission !== moduleId)
+        : [...current.permissoes, moduleId]
+    }));
+  };
+
+  const saveAccess = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const payload = {
+        nivel: editingUser.nivel,
+        status: editingUser.status,
+        statusReason: editingUser.status === 'ativo' ? null : editingUser.statusReason,
+        permissoes: editingUser.permissoes
+      };
+      const { data } = await api.put(`/api/auth/admin/usuarios/${editingUser.id}`, payload);
+      setUsers((current) => current.map((item) => item.id === data.user.id ? data.user : item));
+      setEditingUser(null);
+      notify({
+        type: 'success',
+        title: 'Acesso atualizado',
+        message: data.user.status === 'ativo'
+          ? 'Os módulos foram aplicados. O usuário deverá entrar novamente.'
+          : 'A conta foi suspensa e as sessões anteriores foram encerradas.'
+      });
+    } catch (error) {
+      notify({ type: 'error', title: 'Acesso não atualizado', message: getApiError(error) });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const salvarAcessos = async (e) => {
-    e.preventDefault();
+  const deleteUser = async () => {
+    if (!deleteCandidate) return;
+    setSaving(true);
     try {
-      await axios.put(`${API_URL}/api/auth/admin/usuarios/${usuarioEdit.id}`, {
-        nivel: usuarioEdit.nivel,
-        status: usuarioEdit.status,
-        permissoes: usuarioEdit.permissoes
-      }, getAuthHeader());
-      setModalAberto(false);
-      carregarUsuarios();
-    } catch (err) { alert('Erro ao atualizar permissões'); }
+      await api.delete(`/api/auth/admin/usuarios/${deleteCandidate.id}`);
+      setUsers((current) => current.filter((item) => item.id !== deleteCandidate.id));
+      notify({ type: 'success', title: 'Conta removida', message: `${deleteCandidate.nome} foi removido do sistema.` });
+      setDeleteCandidate(null);
+    } catch (error) {
+      notify({ type: 'error', title: 'Conta não removida', message: getApiError(error) });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const cadastrarEmpresa = async (e) => {
-    e.preventDefault();
+  const createCompany = async (event) => {
+    event.preventDefault();
+    setSaving(true);
     try {
-      await axios.post(`${API_URL}/api/auth/admin/usuarios`, { 
-        ...novoUser, status: 'ativo', permissoes: ["dashboard", "obras"] 
-      }, getAuthHeader());
-      alert("Empresa cadastrada com sucesso!");
-      setNovoUser({ nome: '', email: '', senha: '', nivel: 'empresa' });
-      setAbaAtiva('listagem');
-      carregarUsuarios();
-    } catch (err) { alert('Erro ao cadastrar empresa'); }
+      await api.post('/api/auth/admin/usuarios', {
+        ...newCompany,
+        status: 'ativo',
+        permissoes: ['dashboard', 'obras']
+      });
+      setNewCompany(initialCompany);
+      setActiveTab('accounts');
+      await loadUsers();
+      notify({ type: 'success', title: 'Empresa cadastrada', message: 'A conta foi criada com Dashboard e Gestão de Obras liberados.' });
+    } catch (error) {
+      notify({ type: 'error', title: 'Empresa não cadastrada', message: getApiError(error) });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <div className="houzen-page admin-access-page">
+      <header className="houzen-page-header admin-access-header">
         <div>
-          <h1 className="fw-bold fs-3 mb-1 text-white d-flex align-items-center gap-2">
-            <Shield size={28} className="text-warning" /> Painel de Administração
-          </h1>
-          <p className="text-secondary small">Gerencie as empresas (inquilinos), status de contas e permissões de módulos.</p>
+          <span className="houzen-eyebrow"><Shield size={15} /> Administração da plataforma</span>
+          <h1>Empresas e acessos</h1>
+          <p>Controle contratos, módulos liberados e suspensões sem alterar dados operacionais.</p>
         </div>
-
-        <div className="d-flex gap-2 p-1 rounded-3" style={{ backgroundColor: '#151518' }}>
-          <button onClick={() => setAbaAtiva('listagem')} className={`btn btn-sm px-3 py-2 border-0 ${abaAtiva === 'listagem' ? 'text-black fw-bold' : 'text-secondary'}`} style={{ backgroundColor: abaAtiva === 'listagem' ? '#F97316' : 'transparent', borderRadius: '6px' }}><List size={16} className="me-1"/> Listagem</button>
-          <button onClick={() => setAbaAtiva('cadastro')} className={`btn btn-sm px-3 py-2 border-0 ${abaAtiva === 'cadastro' ? 'text-black fw-bold' : 'text-secondary'}`} style={{ backgroundColor: abaAtiva === 'cadastro' ? '#F97316' : 'transparent', borderRadius: '6px' }}><PlusCircle size={16} className="me-1"/> Nova Empresa</button>
-          {isSuperAdmin && <button onClick={() => setAbaAtiva('recuperacao')} className={`btn btn-sm px-3 py-2 border-0 ${abaAtiva === 'recuperacao' ? 'text-black fw-bold' : 'text-secondary'}`} style={{ backgroundColor: abaAtiva === 'recuperacao' ? '#F97316' : 'transparent', borderRadius: '6px' }}><Key size={16} className="me-1"/> Recuperações</button>}
+        <div className="houzen-segmented-control" aria-label="Seções administrativas">
+          <button type="button" className={activeTab === 'accounts' ? 'is-active' : ''} onClick={() => setActiveTab('accounts')}><List size={16} /> Contas</button>
+          <button type="button" className={activeTab === 'new' ? 'is-active' : ''} onClick={() => setActiveTab('new')}><Plus size={16} /> Nova empresa</button>
+          {isSuperAdmin && <button type="button" className={activeTab === 'recovery' ? 'is-active' : ''} onClick={() => setActiveTab('recovery')}><KeyRound size={16} /> Recuperações</button>}
         </div>
-      </div>
+      </header>
 
-      {abaAtiva === 'listagem' ? (
-        <div className="card p-4 border-0 rounded-4" style={{ backgroundColor: '#151518' }}>
-          {carregando ? <div className="text-center py-5 text-secondary">Carregando base de clientes...</div> : (
-            <div className="table-responsive">
-              <table className="table table-dark table-hover m-0" style={{ '--bs-table-bg': 'transparent' }}>
-                <thead>
-                  <tr className="text-secondary small border-bottom" style={{ borderColor: 'rgba(38, 38, 41, 0.6)' }}>
-                    <th className="py-3">ID</th>
-                    <th className="py-3">Empresa / Usuário</th>
-                    <th className="py-3">Status</th>
-                    <th className="py-3 text-center">Configurar Acesso</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usuarios.map(user => (
-                    <tr key={user.id} className="align-middle border-bottom" style={{ borderColor: 'rgba(38, 38, 41, 0.2)' }}>
-                      <td className="text-secondary small">#{user.id}</td>
-                      <td>
-                        <div className="fw-medium text-white">{user.nome}</div>
-                        <div className="d-flex align-items-center gap-2">
-                            <span className="text-secondary" style={{ fontSize: '12px' }}>{user.email}</span>
-                            {/* TAG DE TIPO */}
-                            <span className="badge text-uppercase" style={{ backgroundColor: 'rgba(255,255,255,0.05)', fontSize: '9px' }}>
-                                {user.nivel === 'empresa' ? 'Empresa' : 'Usuário'}
-                            </span>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="d-flex align-items-center gap-2">
-                          {user.status === 'ativo' ? (
-                            <span className="badge px-2 py-1 bg-success bg-opacity-10 text-success small fw-normal"><UserCheck size={12} className="me-1"/> Ativa</span>
-                          ) : (
-                            <span className="badge px-2 py-1 bg-danger bg-opacity-10 text-danger small fw-normal"><UserX size={12} className="me-1"/> Bloqueada</span>
-                          )}
-                          {['admin', 'superadmin'].includes(user.nivel) && (
-                             <span className="badge px-2 py-1 bg-warning text-black small fw-bold">{user.nivel === 'superadmin' ? 'SUPERADMIN' : 'ADMINISTRADOR'}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="text-center">
-                        {/* PROTEÇÃO: Botões não aparecem para o Admin Houzen */}
-                        {(isSuperAdmin || !['admin', 'superadmin'].includes(user.nivel)) && (
-                          <>
-                            <button onClick={() => abrirModalEdicao(user)} className="btn p-1 border-0 bg-transparent text-secondary shadow-none" title="Editar Permissões"><Key size={18} /></button>
-                            <button onClick={() => deletarUsuario(user.id)} className="btn p-1 border-0 bg-transparent text-danger shadow-none" title="Excluir"><Trash2 size={18} /></button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      ) : abaAtiva === 'cadastro' ? (
-        /* ABA DE CADASTRO */
-        <div className="card p-4 border-0 rounded-4" style={{ backgroundColor: '#151518', maxWidth: '500px' }}>
-          <h5 className="text-white mb-4"><Building className="text-warning me-2" size={20}/> Dados da Nova Empresa</h5>
-          <form onSubmit={cadastrarEmpresa} className="d-flex flex-column gap-3">
-            
-            <div>
-              <label className="form-label small text-secondary mb-1">Nome da Empresa</label>
-              <input 
-                className="form-control text-white border-0 py-2 shadow-none" 
-                style={{ backgroundColor: '#0F0F11', border: '1px solid rgba(38, 38, 41, 0.6)' }} 
-                placeholder="Ex: Construtora Atlas" 
-                onChange={e => setNovoUser({...novoUser, nome: e.target.value})} 
-                required
-              />
+      {activeTab === 'accounts' && (
+        <>
+          <section className="houzen-metrics-grid" aria-label="Resumo de contas">
+            <article className="houzen-metric"><span><Building2 size={19} /></span><div><strong>{metrics.total}</strong><small>Empresas e usuários</small></div></article>
+            <article className="houzen-metric"><span className="is-success"><UserCheck size={19} /></span><div><strong>{metrics.active}</strong><small>Contas ativas</small></div></article>
+            <article className="houzen-metric"><span className="is-danger"><LockKeyhole size={19} /></span><div><strong>{metrics.suspended}</strong><small>Contas suspensas</small></div></article>
+          </section>
+
+          <section className="houzen-panel">
+            <div className="houzen-panel-toolbar">
+              <div><h2>Base de clientes</h2><p>Alterações de acesso encerram as sessões anteriores do usuário.</p></div>
+              <label className="houzen-search"><Search size={17} /><span className="visually-hidden">Buscar conta</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar nome ou e-mail" /></label>
             </div>
 
-            <div>
-              <label className="form-label small text-secondary mb-1">E-mail de Acesso</label>
-              <input 
-                className="form-control text-white border-0 py-2 shadow-none" 
-                style={{ backgroundColor: '#0F0F11', border: '1px solid rgba(38, 38, 41, 0.6)' }} 
-                type="email" 
-                placeholder="contato@empresa.com" 
-                onChange={e => setNovoUser({...novoUser, email: e.target.value})} 
-                required
-              />
-            </div>
+            {loading ? (
+              <div className="houzen-loading-state"><span className="spinner-border spinner-border-sm" /> Carregando contas...</div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="houzen-empty-inline"><UsersRound size={24} /><p>Nenhuma conta encontrada para esta busca.</p></div>
+            ) : (
+              <div className="table-responsive">
+                <table className="houzen-table">
+                  <thead><tr><th>Conta</th><th>Plano de acesso</th><th>Status</th><th><span className="visually-hidden">Ações</span></th></tr></thead>
+                  <tbody>
+                    {filteredUsers.map((target) => {
+                      const protectedAccount = target.id === usuario.id || target.nivel === 'superadmin';
+                      return (
+                        <tr key={target.id}>
+                          <td><strong>{target.nome}</strong><small>{target.email}</small></td>
+                          <td><span className="houzen-role-badge">{target.nivel}</span><small>{normalizePermissions(target.permissoes).length} módulos</small></td>
+                          <td>
+                            <span className={`houzen-status ${target.status === 'ativo' ? 'is-active' : 'is-suspended'}`}><span />{target.status === 'ativo' ? 'Ativa' : 'Suspensa'}</span>
+                            {target.status !== 'ativo' && target.accountStatusReason && <small className="houzen-status-reason">{target.accountStatusReason}</small>}
+                          </td>
+                          <td className="text-end">
+                            {isSuperAdmin && !protectedAccount ? (
+                              <div className="d-inline-flex gap-1">
+                                <button type="button" onClick={() => openAccessEditor(target)} className="houzen-table-action"><KeyRound size={16} /> Gerenciar</button>
+                                <button type="button" onClick={() => setDeleteCandidate(target)} className="houzen-icon-button is-danger" aria-label={`Excluir ${target.nome}`}><Trash2 size={17} /></button>
+                              </div>
+                            ) : <span className="houzen-protected-label">Protegida</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
+      )}
 
-            <div>
-              <label className="form-label small text-secondary mb-1">Senha Inicial</label>
-              <input 
-                className="form-control text-white border-0 py-2 shadow-none" 
-                style={{ backgroundColor: '#0F0F11', border: '1px solid rgba(38, 38, 41, 0.6)' }} 
-                type="password" 
-                placeholder="Defina uma senha segura" 
-                onChange={e => setNovoUser({...novoUser, senha: e.target.value})} 
-                required
-              />
-            </div>
-
-            <button type="submit" className="btn mt-3 fw-bold py-2 text-black" style={{ backgroundColor: '#F97316', borderRadius: '8px' }}>
-              Salvar Empresa no Sistema
-            </button>
+      {activeTab === 'new' && (
+        <section className="houzen-panel houzen-form-panel">
+          <div className="houzen-section-heading"><div><h2>Cadastrar nova empresa</h2><p>O acesso inicial inclui Dashboard e Gestão de Obras. Você pode ajustar o plano depois.</p></div></div>
+          <form onSubmit={createCompany} className="houzen-form-grid">
+            <label className="houzen-field"><span>Nome da empresa</span><input value={newCompany.nome} onChange={(event) => setNewCompany({ ...newCompany, nome: event.target.value })} minLength={2} maxLength={100} required placeholder="Construtora Atlas" /></label>
+            <label className="houzen-field"><span>E-mail de acesso</span><input type="email" value={newCompany.email} onChange={(event) => setNewCompany({ ...newCompany, email: event.target.value })} required placeholder="contato@empresa.com" /></label>
+            <label className="houzen-field houzen-field--full"><span>Senha inicial</span><input type="password" value={newCompany.senha} onChange={(event) => setNewCompany({ ...newCompany, senha: event.target.value })} minLength={8} maxLength={72} autoComplete="new-password" required placeholder="Mínimo de 8 caracteres" /></label>
+            <div className="houzen-form-actions"><button type="submit" disabled={saving} className="houzen-button-primary">{saving ? <span className="spinner-border spinner-border-sm" /> : <Plus size={17} />} Criar empresa</button></div>
           </form>
-        </div>
-      ) : (
-        <PasswordResetRequestsPanel />
+        </section>
       )}
 
-      {/* MODAL DE EDIÇÃO */}
-      {modalAberto && usuarioEdit && (
-        <div className="d-flex align-items-center justify-content-center" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 2000 }}>
-          <div className="card p-4 border w-100 mx-3" style={{ backgroundColor: '#151518', maxWidth: '450px', borderRadius: '16px', color: '#FFFFFF', borderColor: 'rgba(38, 38, 41, 0.6)' }}>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h5 className="fw-bold m-0 d-flex align-items-center gap-2"><Edit2 size={18}/> Editar Acessos</h5>
-              <button onClick={() => setModalAberto(false)} className="btn p-0 text-secondary border-0 bg-transparent shadow-none"><X size={20} /></button>
+      {activeTab === 'recovery' && isSuperAdmin && <PasswordResetRequestsPanel />}
+
+      <ModalDialog
+        open={Boolean(editingUser)}
+        onClose={() => !saving && setEditingUser(null)}
+        title="Plano e acesso da conta"
+        description={editingUser ? `${editingUser.nome} • ${editingUser.email}` : ''}
+        size="lg"
+        actions={editingUser && <><button type="button" onClick={() => setEditingUser(null)} disabled={saving} className="houzen-button-secondary">Cancelar</button><button type="submit" form="access-form" disabled={saving} className="houzen-button-primary">{saving ? <span className="spinner-border spinner-border-sm" /> : <Save size={17} />} Salvar alterações</button></>}
+      >
+        {editingUser && (
+          <form id="access-form" onSubmit={saveAccess}>
+            <div className="houzen-access-status-grid">
+              <button type="button" className={editingUser.status === 'ativo' ? 'is-selected is-active' : ''} onClick={() => setEditingUser({ ...editingUser, status: 'ativo', statusReason: '' })}><UserCheck size={20} /><span><strong>Conta ativa</strong><small>Permite autenticação e uso dos módulos contratados.</small></span>{editingUser.status === 'ativo' && <Check size={17} />}</button>
+              <button type="button" className={editingUser.status !== 'ativo' ? 'is-selected is-suspended' : ''} onClick={() => setEditingUser({ ...editingUser, status: 'suspenso' })}><CircleDollarSign size={20} /><span><strong>Suspender acesso</strong><small>Use para inadimplência, cancelamento ou bloqueio administrativo.</small></span>{editingUser.status !== 'ativo' && <Check size={17} />}</button>
             </div>
-            
-            <form onSubmit={salvarAcessos} className="d-flex flex-column gap-3">
-              <div className="p-3 rounded-3 mb-2" style={{ backgroundColor: '#0F0F11', border: '1px solid rgba(38, 38, 41, 0.6)' }}>
-                <p className="m-0 fw-semibold text-white">{usuarioEdit.nome}</p>
-                <p className="m-0 small text-secondary">{usuarioEdit.email}</p>
-              </div>
 
-              <div>
-                <label className="form-label small text-secondary mb-1">Status da Conta</label>
-                <select className="form-select text-white border-0 py-2 shadow-none" style={{ backgroundColor: '#0F0F11', border: '1px solid rgba(38, 38, 41, 0.6)' }} value={usuarioEdit.status} onChange={e => setUsuarioEdit({...usuarioEdit, status: e.target.value})}>
-                  <option value="ativo">Ativo (Permitir Login)</option>
-                  <option value="bloqueado">Bloqueado (Inadimplente / Suspenso)</option>
-                </select>
-              </div>
+            {editingUser.status !== 'ativo' && <label className="houzen-field mt-3"><span>Motivo exibido ao usuário</span><textarea value={editingUser.statusReason} onChange={(event) => setEditingUser({ ...editingUser, statusReason: event.target.value })} minLength={5} maxLength={255} required rows={3} placeholder="Ex.: Acesso suspenso por pendência financeira. Entre em contato com o suporte." /></label>}
 
-              {isSuperAdmin && (
-                <div>
-                  <label className="form-label small text-secondary mb-1">Perfil de acesso</label>
-                  <select className="form-select text-white border-0 py-2 shadow-none" style={{ backgroundColor: '#0F0F11', border: '1px solid rgba(38, 38, 41, 0.6)' }} value={usuarioEdit.nivel} onChange={e => setUsuarioEdit({...usuarioEdit, nivel: e.target.value})}>
-                    <option value="comum">Usuário comum</option>
-                    <option value="empresa">Empresa</option>
-                    <option value="operador">Operador</option>
-                    <option value="admin">Administrador</option>
-                    <option value="superadmin">SuperAdmin</option>
-                  </select>
-                </div>
-              )}
+            <div className="houzen-field mt-4"><span>Perfil da conta</span><select value={editingUser.nivel} onChange={(event) => setEditingUser({ ...editingUser, nivel: event.target.value })}><option value="comum">Usuário comum</option><option value="empresa">Empresa</option><option value="operador">Operador</option><option value="admin">Administrador</option></select></div>
 
-              <div>
-                <label className="form-label small text-secondary mb-2 mt-2">Módulos Contratados (Liberados)</label>
-                <div className="d-flex flex-column gap-2 p-3 rounded-3" style={{ backgroundColor: '#0F0F11', border: '1px solid rgba(38, 38, 41, 0.6)' }}>
-                  {modulosDisponiveis.map(mod => (
-                    <label key={mod.id} className="d-flex align-items-center gap-2 cursor-pointer small text-white">
-                      <input 
-                        type="checkbox" 
-                        className="form-check-input mt-0" 
-                        style={{ borderColor: '#F97316', backgroundColor: usuarioEdit.permissoes.includes(mod.id) ? '#F97316' : 'transparent' }}
-                        checked={usuarioEdit.permissoes.includes(mod.id)} 
-                        onChange={() => {
-                          const novas = usuarioEdit.permissoes.includes(mod.id) ? usuarioEdit.permissoes.filter(m => m !== mod.id) : [...usuarioEdit.permissoes, mod.id];
-                          setUsuarioEdit({...usuarioEdit, permissoes: novas});
-                        }}
-                      />
-                      {mod.nome}
-                    </label>
-                  ))}
-                </div>
-              </div>
+            <div className="houzen-section-heading mt-4"><div><h3>Módulos contratados</h3><p>O backend bloqueará chamadas diretas para módulos não selecionados.</p></div><span className="houzen-selection-count">{editingUser.permissoes.length} selecionados</span></div>
+            <div className="houzen-module-grid">
+              {MODULES.map((module) => {
+                const selected = editingUser.permissoes.includes(module.id);
+                return <button key={module.id} type="button" aria-pressed={selected} onClick={() => togglePermission(module.id)} className={selected ? 'is-selected' : ''}><span className="houzen-module-check">{selected && <Check size={15} />}</span><span><strong>{module.name}</strong><small>{module.description}</small></span></button>;
+              })}
+            </div>
+          </form>
+        )}
+      </ModalDialog>
 
-              <div className="d-flex gap-2 justify-content-end mt-3">
-                <button type="button" onClick={() => setModalAberto(false)} className="btn btn-sm px-3 py-2 text-white border-0" style={{ backgroundColor: 'rgba(38, 38, 41, 0.6)' }}>Cancelar</button>
-                <button type="submit" className="btn btn-sm px-3 py-2 text-black border-0 fw-semibold d-flex align-items-center gap-1" style={{ backgroundColor: '#F97316' }}><Save size={16}/> Salvar Configurações</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ModalDialog
+        open={Boolean(deleteCandidate)}
+        onClose={() => !saving && setDeleteCandidate(null)}
+        title="Excluir conta permanentemente?"
+        description="Esta operação remove também os dados vinculados à conta e não pode ser desfeita."
+        actions={<><button type="button" onClick={() => setDeleteCandidate(null)} disabled={saving} className="houzen-button-secondary">Cancelar</button><button type="button" onClick={deleteUser} disabled={saving} className="houzen-button-danger">{saving ? <span className="spinner-border spinner-border-sm" /> : <Trash2 size={17} />} Excluir conta</button></>}
+      >
+        {deleteCandidate && <div className="houzen-danger-summary"><strong>{deleteCandidate.nome}</strong><span>{deleteCandidate.email}</span></div>}
+      </ModalDialog>
     </div>
   );
 }

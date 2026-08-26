@@ -13,16 +13,20 @@ const {
   signUserToken,
   requireAuth,
   requireSuperAdmin,
-  requirePasswordChangeCompleted
+  requirePasswordChangeCompleted,
+  requireAnyModulePermission
 } = require('../src/middleware/auth');
 const { verifyFirebaseIdToken } = require('../src/config/firebase');
 const {
   validarForgotPassword,
   validarIdParam,
   validarRegistro,
-  validarResolucaoReset
+  validarResolucaoReset,
+  validarAcessoUsuario,
+  validarTema
 } = require('../src/middleware/validators');
 const authRoutes = require('../src/routes/authRoutes');
+const authController = require('../src/controllers/authController');
 
 let server;
 let baseUrl;
@@ -33,6 +37,8 @@ before(async () => {
   app.post('/register', validarRegistro, (_req, res) => res.sendStatus(204));
   app.post('/forgot', validarForgotPassword, (_req, res) => res.sendStatus(204));
   app.post('/resolve/:id', validarIdParam, validarResolucaoReset, (_req, res) => res.sendStatus(204));
+  app.put('/access', validarAcessoUsuario, (_req, res) => res.sendStatus(204));
+  app.put('/theme', validarTema, (_req, res) => res.sendStatus(204));
   app.use('/api/auth', authRoutes);
   await new Promise((resolve) => {
     server = app.listen(0, '127.0.0.1', resolve);
@@ -85,6 +91,40 @@ test('reset revoga tokens emitidos com uma versao de sessao anterior', async () 
     db.query = originalQuery;
   }
   assert.equal(res.statusCode, 401);
+  assert.equal(nextCalled, false);
+});
+
+test('conta suspensa recebe bloqueio explicito mesmo com token valido', async () => {
+  const originalQuery = db.query;
+  db.query = async () => ({
+    rows: [{
+      id: 42,
+      nome: 'Empresa suspensa',
+      email: 'financeiro@example.com',
+      nivel: 'empresa',
+      status: 'suspenso',
+      account_status_reason: 'Mensalidade pendente',
+      permissoes: ['dashboard'],
+      session_version: 0
+    }]
+  });
+  const token = signUserToken(42, 0);
+  const req = { get: () => `Bearer ${token}` };
+  const res = {
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; }
+  };
+  let nextCalled = false;
+  try {
+    await requireAuth(req, res, () => { nextCalled = true; });
+  } finally {
+    db.query = originalQuery;
+  }
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.code, 'ACCOUNT_SUSPENDED');
+  assert.equal(res.body.error, 'Mensalidade pendente');
   assert.equal(nextCalled, false);
 });
 
@@ -142,6 +182,102 @@ test('administrador comum nao passa pela autorizacao de SuperAdmin', () => {
   requireSuperAdmin(req, res, () => { nextCalled = true; });
   assert.equal(res.statusCode, 403);
   assert.equal(nextCalled, false);
+});
+
+test('usuario sem modulo contratado e bloqueado no backend', () => {
+  const middleware = requireAnyModulePermission('frota');
+  const req = { user: { nivel: 'empresa', permissoes: ['dashboard'] } };
+  const res = {
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; }
+  };
+  let nextCalled = false;
+  middleware(req, res, () => { nextCalled = true; });
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.code, 'MODULE_ACCESS_DENIED');
+  assert.equal(nextCalled, false);
+});
+
+test('usuario com modulo contratado passa pela autorizacao', () => {
+  const middleware = requireAnyModulePermission('frota');
+  const req = { user: { nivel: 'empresa', permissoes: ['frota'] } };
+  let nextCalled = false;
+  middleware(req, {}, () => { nextCalled = true; });
+  assert.equal(nextCalled, true);
+});
+
+test('suspensao exige motivo e aceita modulos conhecidos', async () => {
+  const invalidResponse = await fetch(`${baseUrl}/access`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ nivel: 'empresa', status: 'suspenso', permissoes: ['dashboard'] })
+  });
+  assert.equal(invalidResponse.status, 400);
+
+  const validResponse = await fetch(`${baseUrl}/access`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ nivel: 'empresa', status: 'suspenso', statusReason: 'Mensalidade pendente', permissoes: ['dashboard'] })
+  });
+  assert.equal(validResponse.status, 204);
+});
+
+test('tela de acesso nao permite promover contas para SuperAdmin', async () => {
+  const response = await fetch(`${baseUrl}/access`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ nivel: 'superadmin', status: 'ativo', permissoes: ['dashboard'] })
+  });
+  assert.equal(response.status, 400);
+});
+
+test('preferencia de tema aceita somente claro ou escuro', async () => {
+  const validResponse = await fetch(`${baseUrl}/theme`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ theme: 'light' })
+  });
+  assert.equal(validResponse.status, 204);
+
+  const invalidResponse = await fetch(`${baseUrl}/theme`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ theme: 'system-injected' })
+  });
+  assert.equal(invalidResponse.status, 400);
+});
+
+test('listagem administrativa preserva status, motivo, modulos e tema', async () => {
+  const originalQuery = db.query;
+  db.query = async () => ({
+    rows: [{
+      id: 7,
+      nome: 'Empresa teste',
+      email: 'empresa@example.com',
+      nivel: 'empresa',
+      status: 'suspenso',
+      account_status_reason: 'Mensalidade pendente',
+      permissoes: ['dashboard', 'frota'],
+      theme_preference: 'light',
+      must_change_password: false
+    }]
+  });
+  const res = {
+    body: null,
+    json(body) { this.body = body; return this; },
+    status() { return this; }
+  };
+  try {
+    await authController.listarUsuariosAdmin({}, res);
+  } finally {
+    db.query = originalQuery;
+  }
+  assert.equal(res.body[0].status, 'suspenso');
+  assert.equal(res.body[0].accountStatusReason, 'Mensalidade pendente');
+  assert.deepEqual(res.body[0].permissoes, ['dashboard', 'frota']);
+  assert.equal(res.body[0].theme, 'light');
 });
 
 test('geracao de senha exige registro da verificacao de identidade', async () => {

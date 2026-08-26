@@ -5,7 +5,8 @@ const {
   requireAdmin,
   requireAuth,
   requireSuperAdmin,
-  requirePasswordChangeCompleted
+  requirePasswordChangeCompleted,
+  requireAnyModulePermission
 } = require('../middleware/auth');
 const {
   authLimiter,
@@ -30,6 +31,7 @@ const {
   validarStatusCronograma,
   validarUsuarioEmpresa,
   validarAcessoUsuario,
+  validarTema,
   validarAdminObra,
   validarAdminSede,
   validarAdminFuncionario,
@@ -49,36 +51,37 @@ router.use(requireAuth);
 
 router.get('/session', authController.getSession);
 router.put('/change-temporary-password', authLimiter, validarTrocaSenhaTemporaria, authController.changeTemporaryPassword);
+router.put('/preferences/theme', validarTema, authController.updateThemePreference);
 router.use(requirePasswordChangeCompleted);
-router.get('/dashboard/resumo', authController.getDashboardResumo);
+router.get('/dashboard/resumo', requireAnyModulePermission('dashboard'), authController.getDashboardResumo);
 
-router.get('/rh/funcionarios', authController.getFuncionarios);
-router.post('/rh/funcionarios', validarFuncionario, authController.criarFuncionario);
-router.put('/rh/funcionarios/:id', validarIdParam, validarFuncionario, authController.editarFuncionario);
-router.delete('/rh/funcionarios/:id', validarIdParam, authController.deletarFuncionario);
+router.get('/rh/funcionarios', requireAnyModulePermission('rh'), authController.getFuncionarios);
+router.post('/rh/funcionarios', requireAnyModulePermission('rh'), validarFuncionario, authController.criarFuncionario);
+router.put('/rh/funcionarios/:id', requireAnyModulePermission('rh'), validarIdParam, validarFuncionario, authController.editarFuncionario);
+router.delete('/rh/funcionarios/:id', requireAnyModulePermission('rh'), validarIdParam, authController.deletarFuncionario);
 
-router.get('/suprimentos', authController.getSuprimentos);
-router.post('/suprimentos', validarSuprimento, authController.criarSuprimento);
-router.put('/suprimentos/:id', validarIdParam, validarSuprimento, authController.editarSuprimento);
-router.delete('/suprimentos/:id', validarIdParam, authController.deletarSuprimento);
+router.get('/suprimentos', requireAnyModulePermission('suprimentos'), authController.getSuprimentos);
+router.post('/suprimentos', requireAnyModulePermission('suprimentos'), validarSuprimento, authController.criarSuprimento);
+router.put('/suprimentos/:id', requireAnyModulePermission('suprimentos'), validarIdParam, validarSuprimento, authController.editarSuprimento);
+router.delete('/suprimentos/:id', requireAnyModulePermission('suprimentos'), validarIdParam, authController.deletarSuprimento);
 
-router.get('/sedes', authController.getSedes);
-router.post('/sedes', validarSede, authController.criarSede);
+router.get('/sedes', requireAnyModulePermission('suprimentos', 'frota', 'obras'), authController.getSedes);
+router.post('/sedes', requireAnyModulePermission('suprimentos', 'frota', 'obras'), validarSede, authController.criarSede);
 
-router.get('/frota', authController.getFrota);
-router.post('/frota', validarFrota, authController.criarFrota);
-router.put('/frota/:id', validarIdParam, validarFrota, authController.editarFrota);
-router.delete('/frota/:id', validarIdParam, authController.deletarFrota);
+router.get('/frota', requireAnyModulePermission('frota'), authController.getFrota);
+router.post('/frota', requireAnyModulePermission('frota'), validarFrota, authController.criarFrota);
+router.put('/frota/:id', requireAnyModulePermission('frota'), validarIdParam, validarFrota, authController.editarFrota);
+router.delete('/frota/:id', requireAnyModulePermission('frota'), validarIdParam, authController.deletarFrota);
 
-router.get('/cronograma', authController.getCronograma);
-router.post('/cronograma', validarCronograma, authController.criarCronograma);
-router.put('/cronograma/:id', validarIdParam, validarStatusCronograma, authController.atualizarStatusCronograma);
-router.delete('/cronograma/:id', validarIdParam, authController.deletarCronograma);
+router.get('/cronograma', requireAnyModulePermission('cronograma'), authController.getCronograma);
+router.post('/cronograma', requireAnyModulePermission('cronograma'), validarCronograma, authController.criarCronograma);
+router.put('/cronograma/:id', requireAnyModulePermission('cronograma'), validarIdParam, validarStatusCronograma, authController.atualizarStatusCronograma);
+router.delete('/cronograma/:id', requireAnyModulePermission('cronograma'), validarIdParam, authController.deletarCronograma);
 
-router.get('/obras', authController.getObras);
-router.post('/obras', validarObra, authController.criarObra);
-router.put('/obras/:id', validarIdParam, validarObra, authController.editarObra);
-router.delete('/obras/:id', validarIdParam, authController.deletarObra);
+router.get('/obras', requireAnyModulePermission('dashboard', 'obras', 'rh', 'suprimentos', 'frota', 'cronograma'), authController.getObras);
+router.post('/obras', requireAnyModulePermission('obras', 'cronograma'), validarObra, authController.criarObra);
+router.put('/obras/:id', requireAnyModulePermission('obras', 'cronograma'), validarIdParam, validarObra, authController.editarObra);
+router.delete('/obras/:id', requireAnyModulePermission('obras', 'cronograma'), validarIdParam, authController.deletarObra);
 
 router.use('/admin', requireAdmin);
 router.get('/admin/password-reset-requests', requireSuperAdmin, authController.listPasswordResetRequests);
@@ -94,7 +97,7 @@ router.post('/admin/popular/funcionario', validarAdminFuncionario, authControlle
 router.post('/admin/popular/suprimento', validarAdminSuprimento, authController.popularSuprimentoAdmin);
 router.post('/admin/popular/frota', validarAdminFrota, authController.popularFrotaAdmin);
 router.post('/admin/popular/cronograma', validarAdminCronograma, authController.popularCronogramaAdmin);
-router.put('/admin/usuarios/:id', validarIdParam, validarAcessoUsuario, authController.atualizarAcessoUsuario);
-router.delete('/admin/usuarios/:id', validarIdParam, authController.excluirUsuario);
+router.put('/admin/usuarios/:id', requireSuperAdmin, validarIdParam, validarAcessoUsuario, authController.atualizarAcessoUsuario);
+router.delete('/admin/usuarios/:id', requireSuperAdmin, validarIdParam, authController.excluirUsuario);
 
 module.exports = router;

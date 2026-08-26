@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import axios from 'axios';
+import { useNotifications } from '../../components/notificationContext';
 
 export default function FormCronograma({ usuarioId, obras, onSuccess }) {
+  const { notify } = useNotifications();
   const [data, setData] = useState({ obra_id: '', fase: '', prazo: '' });
   const inputStyle = { backgroundColor: '#0F0F11', color: '#FFFFFF', border: '1px solid #333' };
 
@@ -26,11 +28,11 @@ export default function FormCronograma({ usuarioId, obras, onSuccess }) {
         usuario_id: usuarioId 
       }, getAuthHeader());
       
-      alert('Cronograma registrado!');
+      notify({ type: 'success', title: 'Cronograma registrado', message: 'A nova etapa foi adicionada à empresa.' });
       onSuccess();
     } catch (err) {
       console.error(err);
-      alert('Erro ao registrar cronograma.');
+      notify({ type: 'error', title: 'Cronograma não registrado', message: 'Revise os dados e tente novamente.' });
     }
   };
 

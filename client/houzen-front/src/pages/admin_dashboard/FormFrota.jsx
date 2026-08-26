@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Save } from 'lucide-react';
+import { useNotifications } from '../../components/notificationContext';
 
 export default function FormFrota({ usuarioId, obras, sedes, onSuccess }) {
+  const { notify } = useNotifications();
   const [data, setData] = useState({ 
     obra_id: '', 
     sede_id: '', 
@@ -36,12 +38,12 @@ export default function FormFrota({ usuarioId, obras, sedes, onSuccess }) {
         usuario_id: usuarioId 
       }, getAuthHeader());
       
-      alert('Equipamento/Veículo cadastrado com sucesso!');
+      notify({ type: 'success', title: 'Ativo cadastrado', message: 'O equipamento ou veículo foi vinculado à empresa.' });
       onSuccess();
       setData({ obra_id: '', sede_id: '', nome: '', tipo: 'Equipamento', codigo: '', status: 'Operando' });
     } catch (err) {
       console.error(err);
-      alert('Erro ao cadastrar');
+      notify({ type: 'error', title: 'Ativo não cadastrado', message: 'Revise os dados e tente novamente.' });
     } finally {
       setLoading(false);
     }

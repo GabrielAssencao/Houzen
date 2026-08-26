@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Plus, X, Trash2, CheckCircle2, Clock, Calendar, AlertTriangle, Briefcase, Edit3 } from 'lucide-react';
+import { useNotifications } from '../../components/notificationContext';
 
 export default function TimelineModule() {
+  const { notify } = useNotifications();
   const [obras, setObras] = useState([]);
   const [obraSelecionadaId, setObraSelecionadaId] = useState('');
   const [etapas, setEtapas] = useState([]);
@@ -125,7 +127,7 @@ export default function TimelineModule() {
       setObraSelecionadaId('');
       carregarObrasDoBanco();
     } catch (err) {
-      alert('Erro ao excluir projeto de obra.');
+      notify({ type: 'error', title: 'Obra não removida', message: err.response?.data?.error || 'Não foi possível excluir o projeto de obra.' });
     } finally {
       setCarregandoAction(false);
     }
@@ -157,7 +159,7 @@ export default function TimelineModule() {
       await axios.put(`${API_URL}/api/auth/cronograma/${etapa.id}`, { status: novoStatus }, getAuthHeader());
       setEtapas(etapas.map(item => item.id === etapa.id ? { ...item, status: novoStatus } : item));
     } catch (err) {
-      alert('Erro ao mudar status.');
+      notify({ type: 'error', title: 'Status não atualizado', message: err.response?.data?.error || 'Não foi possível alterar o status da etapa.' });
     }
   };
 
@@ -169,7 +171,7 @@ export default function TimelineModule() {
       setModalDeletarEtapaAberto(false);
       setEtapaSelecionada(null);
     } catch (err) {
-      alert('Erro ao excluir etapa.');
+      notify({ type: 'error', title: 'Etapa não removida', message: err.response?.data?.error || 'Não foi possível excluir a etapa.' });
     } finally {
       setCarregandoAction(false);
     }

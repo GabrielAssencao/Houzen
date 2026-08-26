@@ -2,10 +2,10 @@ import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Package, Truck, Calendar, 
-  LogOut, ChevronLeft, ChevronRight, HardHat, Shield, Settings 
+  LogOut, ChevronLeft, ChevronRight, HardHat, Shield, Settings, UserRound
 } from 'lucide-react';
 
-export default function DashboardLayout({ usuario, onLogout }) {
+export default function DashboardLayout({ usuario, onLogout, onUserUpdated }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [recolhido, setRecolhido] = React.useState(false);
@@ -37,8 +37,8 @@ export default function DashboardLayout({ usuario, onLogout }) {
   };
 
   return (
-    <div className="d-flex vh-100 overflow-hidden" style={{ backgroundColor: '#09090B', color: '#FFFFFF', fontFamily: 'Inter, sans-serif' }}>
-      <div className="d-flex flex-column justify-content-between p-3 border-end" style={{ width: recolhido ? '80px' : '260px', backgroundColor: '#09090B', borderColor: 'rgba(38, 38, 41, 0.6)', transition: 'width 0.3s ease', zIndex: 1020 }}>
+    <div className="houzen-shell d-flex vh-100 overflow-hidden" data-theme={usuario?.theme || 'dark'}>
+      <aside className="houzen-sidebar d-flex flex-column justify-content-between p-3 border-end" style={{ width: recolhido ? '80px' : '260px' }}>
         <div>
           <div className="d-flex align-items-center gap-2 mb-4 px-2" style={{ height: '50px' }}>
             <div className="d-flex align-items-center justify-content-center rounded" style={{ backgroundColor: '#F97316', width: '36px', height: '36px' }}>
@@ -47,14 +47,14 @@ export default function DashboardLayout({ usuario, onLogout }) {
             {!recolhido && <span className="fw-bold fs-5 tracking-tight">Houzen</span>}
           </div>
 
-          <nav className="nav flex-column gap-1">
+          <nav className="nav flex-column gap-1" aria-label="NavegaÃ§Ã£o principal">
             {isAdmin ? (
               <>
                 {/* LINKS EXCLUSIVOS DO ADMIN */}
-                <Link to="/dashboard/admin" className="nav-link d-flex align-items-center gap-3 rounded-3 px-3 py-2.5 transition-all text-decoration-none" style={{ backgroundColor: location.pathname === '/dashboard/admin' ? '#F97316' : 'transparent', color: location.pathname === '/dashboard/admin' ? '#000000' : '#F97316', fontWeight: '600' }}>
+                <Link to="/dashboard/admin" className={`houzen-nav-link ${location.pathname === '/dashboard/admin' ? 'is-active' : ''}`}>
                   <Shield size={20} /> {!recolhido && <span>Painel Admin</span>}
                 </Link>
-                <Link to="/dashboard/admin-datamanagement" className="nav-link d-flex align-items-center gap-3 rounded-3 px-3 py-2.5 transition-all text-decoration-none mb-3" style={{ backgroundColor: location.pathname === '/dashboard/admin-datamanagement' ? '#F97316' : 'transparent', color: location.pathname === '/dashboard/admin-datamanagement' ? '#000000' : '#A1A1AA', fontWeight: '600' }}>
+                <Link to="/dashboard/admin-datamanagement" className={`houzen-nav-link ${location.pathname === '/dashboard/admin-datamanagement' ? 'is-active' : ''}`}>
                   <Settings size={20} /> {!recolhido && <span>Popular Empresa</span>}
                 </Link>
               </>
@@ -66,8 +66,7 @@ export default function DashboardLayout({ usuario, onLogout }) {
 
                   const Ativo = location.pathname === item.path;
                   return (
-                    <Link key={item.path} to={item.path} className="nav-link d-flex align-items-center gap-3 rounded-3 px-3 py-2.5 transition-all text-decoration-none" 
-                      style={{ backgroundColor: Ativo ? '#F97316' : 'transparent', color: Ativo ? '#000000' : '#A1A1AA', fontWeight: Ativo ? '600' : '500' }}>
+                    <Link key={item.path} to={item.path} className={`houzen-nav-link ${Ativo ? 'is-active' : ''}`}>
                       <item.icone size={20} /> {!recolhido && <span>{item.nome}</span>}
                     </Link>
                   );
@@ -78,18 +77,22 @@ export default function DashboardLayout({ usuario, onLogout }) {
         </div>
 
         <div className="d-flex flex-column gap-2">
-            <button onClick={() => setRecolhido(!recolhido)} className="btn border-0 d-flex align-items-center gap-3 px-3 py-2 text-secondary w-100" style={{ textAlign: 'left', background: 'none' }}>
+            {!recolhido && <div className="houzen-user-summary"><UserRound size={18} /><div><strong>{usuario?.nome}</strong><small>{usuario?.email}</small></div></div>}
+            <Link to="/dashboard/settings" className={`houzen-nav-link ${location.pathname === '/dashboard/settings' ? 'is-active' : ''}`}>
+              <Settings size={20} /> {!recolhido && <span>ConfiguraÃ§Ãµes</span>}
+            </Link>
+            <button onClick={() => setRecolhido(!recolhido)} className="houzen-sidebar-button">
                 {recolhido ? <ChevronRight size={20} /> : <><ChevronLeft size={20} /> <span>Recolher</span></>}
             </button>
-            <button onClick={handleSair} className="btn border-0 d-flex align-items-center gap-3 px-3 py-2 text-danger w-100" style={{ textAlign: 'left', background: 'none' }}>
+            <button onClick={handleSair} className="houzen-sidebar-button is-danger">
                 <LogOut size={20} /> {!recolhido && <span>Sair</span>}
             </button>
         </div>
-      </div>
+      </aside>
 
-      <div className="flex-grow-1 overflow-auto p-4 p-md-5">
-        <Outlet /> 
-      </div>
+      <main className="houzen-main flex-grow-1 overflow-auto p-3 p-md-5">
+        <Outlet context={{ usuario, onLogout: handleSair, onUserUpdated }} />
+      </main>
     </div>
   );
 }

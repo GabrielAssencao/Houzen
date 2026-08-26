@@ -9,3 +9,251 @@
 .hover-white:hover {
   color: #ffffff !important;
 }
+
+.houzen-shell {
+  --hz-bg: #09090b;
+  --hz-sidebar: #0c0c0f;
+  --hz-surface: #151518;
+  --hz-surface-soft: #0f0f11;
+  --hz-surface-hover: #1c1c20;
+  --hz-text: #fafafa;
+  --hz-muted: #a1a1aa;
+  --hz-border: #29292e;
+  --hz-accent: #f97316;
+  --hz-accent-soft: rgba(249, 115, 22, 0.12);
+  --hz-shadow: 0 18px 50px rgba(0, 0, 0, 0.2);
+  background: var(--hz-bg);
+  color: var(--hz-text);
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.houzen-shell[data-theme="light"] {
+  --hz-bg: #f4f4f5;
+  --hz-sidebar: #ffffff;
+  --hz-surface: #ffffff;
+  --hz-surface-soft: #f8f8fa;
+  --hz-surface-hover: #f0f0f2;
+  --hz-text: #18181b;
+  --hz-muted: #64646f;
+  --hz-border: #dedee3;
+  --hz-accent-soft: rgba(249, 115, 22, 0.1);
+  --hz-shadow: 0 18px 45px rgba(39, 39, 42, 0.08);
+}
+
+.houzen-sidebar {
+  flex: 0 0 auto;
+  background: var(--hz-sidebar);
+  border-color: var(--hz-border) !important;
+  color: var(--hz-text);
+  transition: width 180ms ease;
+  z-index: 1020;
+}
+
+.houzen-main { background: var(--hz-bg); color: var(--hz-text); }
+
+.houzen-nav-link,
+.houzen-sidebar-button {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 42px;
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--hz-muted);
+  font-size: 0.9rem;
+  font-weight: 550;
+  text-align: left;
+  text-decoration: none;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.houzen-nav-link:hover,
+.houzen-sidebar-button:hover { background: var(--hz-surface-hover); color: var(--hz-text); }
+.houzen-nav-link.is-active { background: var(--hz-accent); color: #111; }
+.houzen-sidebar-button.is-danger { color: #ef4444; }
+
+.houzen-user-summary {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.75rem;
+  margin-bottom: 0.25rem;
+  border-top: 1px solid var(--hz-border);
+  color: var(--hz-text);
+}
+.houzen-user-summary div { min-width: 0; }
+.houzen-user-summary strong, .houzen-user-summary small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.houzen-user-summary strong { font-size: 0.82rem; }
+.houzen-user-summary small { color: var(--hz-muted); font-size: 0.7rem; }
+
+.houzen-page { width: 100%; max-width: 1440px; margin: 0 auto; }
+.houzen-page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem; margin-bottom: 1.5rem; }
+.houzen-page-header h1 { margin: 0.35rem 0; color: var(--hz-text); font-size: clamp(1.6rem, 3vw, 2.15rem); font-weight: 750; letter-spacing: -0.035em; }
+.houzen-page-header p, .houzen-section-heading p, .houzen-panel-toolbar p { margin: 0; color: var(--hz-muted); font-size: 0.88rem; }
+.houzen-eyebrow { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--hz-accent); font-size: 0.72rem; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; }
+
+.houzen-segmented-control { display: flex; gap: 0.2rem; padding: 0.25rem; border: 1px solid var(--hz-border); border-radius: 10px; background: var(--hz-surface); }
+.houzen-segmented-control button { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.7rem; border: 0; border-radius: 7px; background: transparent; color: var(--hz-muted); font-size: 0.82rem; font-weight: 650; white-space: nowrap; }
+.houzen-segmented-control button:hover { color: var(--hz-text); }
+.houzen-segmented-control button.is-active { background: var(--hz-accent); color: #111; }
+
+.houzen-metrics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; margin-bottom: 0.9rem; }
+.houzen-metric { display: flex; align-items: center; gap: 0.8rem; padding: 1rem; border: 1px solid var(--hz-border); border-radius: 12px; background: var(--hz-surface); }
+.houzen-metric > span { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 9px; background: var(--hz-accent-soft); color: var(--hz-accent); }
+.houzen-metric > span.is-success { background: rgba(34, 197, 94, 0.12); color: #22c55e; }
+.houzen-metric > span.is-danger { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+.houzen-metric strong, .houzen-metric small { display: block; }
+.houzen-metric strong { color: var(--hz-text); font-size: 1.35rem; line-height: 1; }
+.houzen-metric small { margin-top: 0.25rem; color: var(--hz-muted); font-size: 0.75rem; }
+
+.houzen-panel { border: 1px solid var(--hz-border); border-radius: 14px; background: var(--hz-surface); box-shadow: var(--hz-shadow); overflow: hidden; }
+.houzen-panel-toolbar, .houzen-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.houzen-panel-toolbar { padding: 1.1rem 1.2rem; border-bottom: 1px solid var(--hz-border); }
+.houzen-panel-toolbar h2, .houzen-section-heading h2, .houzen-section-heading h3 { margin: 0 0 0.2rem; color: var(--hz-text); font-size: 1rem; font-weight: 700; }
+.houzen-section-heading h3 { font-size: 0.92rem; }
+
+.houzen-search { display: flex; align-items: center; gap: 0.55rem; min-width: min(280px, 100%); padding: 0.55rem 0.7rem; border: 1px solid var(--hz-border); border-radius: 8px; background: var(--hz-surface-soft); color: var(--hz-muted); }
+.houzen-search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--hz-text); font-size: 0.82rem; }
+.houzen-search input::placeholder { color: var(--hz-muted); }
+
+.houzen-table { width: 100%; border-collapse: collapse; color: var(--hz-text); }
+.houzen-table th { padding: 0.7rem 1.2rem; background: var(--hz-surface-soft); color: var(--hz-muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.houzen-table td { padding: 0.9rem 1.2rem; border-top: 1px solid var(--hz-border); vertical-align: middle; font-size: 0.83rem; }
+.houzen-table tbody tr:hover { background: var(--hz-surface-hover); }
+.houzen-table td strong, .houzen-table td small { display: block; }
+.houzen-table td small { margin-top: 0.2rem; color: var(--hz-muted); }
+.houzen-role-badge { display: inline-flex; padding: 0.2rem 0.45rem; border: 1px solid var(--hz-border); border-radius: 5px; color: var(--hz-text); font-size: 0.66rem; font-weight: 700; text-transform: uppercase; }
+.houzen-status { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; font-weight: 650; }
+.houzen-status > span { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.houzen-status.is-active { color: #22c55e; }
+.houzen-status.is-suspended { color: #ef4444; }
+.houzen-status-reason { max-width: 300px; }
+.houzen-table-action { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.42rem 0.6rem; border: 1px solid var(--hz-border); border-radius: 7px; background: transparent; color: var(--hz-text); font-size: 0.75rem; font-weight: 650; }
+.houzen-table-action:hover { border-color: var(--hz-accent); color: var(--hz-accent); }
+.houzen-protected-label { color: var(--hz-muted); font-size: 0.72rem; }
+
+.houzen-loading-state, .houzen-empty-inline { display: flex; align-items: center; justify-content: center; gap: 0.6rem; min-height: 180px; color: var(--hz-muted); }
+.houzen-empty-inline p { margin: 0; }
+.houzen-form-panel { max-width: 760px; padding: 1.25rem; }
+.houzen-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.houzen-field { display: flex; flex-direction: column; gap: 0.4rem; color: var(--hz-text); }
+.houzen-field > span { color: var(--hz-muted); font-size: 0.76rem; font-weight: 650; }
+.houzen-field input, .houzen-field select, .houzen-field textarea { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid var(--hz-border); border-radius: 8px; outline: none; background: var(--hz-surface-soft); color: var(--hz-text); font-size: 0.86rem; }
+.houzen-field textarea { resize: vertical; }
+.houzen-field input:focus, .houzen-field select:focus, .houzen-field textarea:focus { border-color: var(--hz-accent); box-shadow: 0 0 0 3px var(--hz-accent-soft); }
+.houzen-field--full, .houzen-form-actions { grid-column: 1 / -1; }
+.houzen-form-actions { display: flex; justify-content: flex-end; }
+
+.houzen-button-primary, .houzen-button-secondary, .houzen-button-danger { display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; min-height: 38px; padding: 0.55rem 0.8rem; border: 1px solid transparent; border-radius: 8px; font-size: 0.8rem; font-weight: 700; }
+.houzen-button-primary { background: var(--hz-accent); color: #111; }
+.houzen-button-secondary { border-color: var(--hz-border); background: var(--hz-surface-soft); color: var(--hz-text); }
+.houzen-button-danger { background: #dc2626; color: #fff; }
+.houzen-button-primary:disabled, .houzen-button-secondary:disabled, .houzen-button-danger:disabled { opacity: 0.55; cursor: not-allowed; }
+.houzen-icon-button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: inherit; }
+.houzen-icon-button:hover { background: rgba(127, 127, 127, 0.12); }
+.houzen-icon-button.is-danger { color: #ef4444; }
+
+.houzen-modal-backdrop { position: fixed; inset: 0; z-index: 2050; display: grid; place-items: center; padding: 1rem; background: rgba(0, 0, 0, 0.68); backdrop-filter: blur(3px); }
+.houzen-modal { width: min(520px, 100%); max-height: calc(100vh - 2rem); overflow: auto; border: 1px solid var(--hz-border); border-radius: 14px; background: var(--hz-surface); color: var(--hz-text); box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38); }
+.houzen-modal--lg { width: min(760px, 100%); }
+.houzen-modal__header, .houzen-modal__body, .houzen-modal__footer { padding: 1rem 1.2rem; }
+.houzen-modal__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--hz-border); }
+.houzen-modal__title { margin: 0; color: var(--hz-text); font-size: 1.05rem; font-weight: 750; }
+.houzen-modal__description { margin: 0.25rem 0 0; color: var(--hz-muted); font-size: 0.78rem; }
+.houzen-modal__footer { display: flex; justify-content: flex-end; gap: 0.55rem; border-top: 1px solid var(--hz-border); }
+
+.houzen-access-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
+.houzen-access-status-grid button, .houzen-module-grid button { display: flex; align-items: flex-start; gap: 0.65rem; padding: 0.8rem; border: 1px solid var(--hz-border); border-radius: 9px; background: var(--hz-surface-soft); color: var(--hz-text); text-align: left; }
+.houzen-access-status-grid button > span, .houzen-module-grid button > span:last-child { flex: 1; }
+.houzen-access-status-grid strong, .houzen-access-status-grid small, .houzen-module-grid strong, .houzen-module-grid small { display: block; }
+.houzen-access-status-grid strong, .houzen-module-grid strong { font-size: 0.82rem; }
+.houzen-access-status-grid small, .houzen-module-grid small { margin-top: 0.25rem; color: var(--hz-muted); font-size: 0.7rem; line-height: 1.35; }
+.houzen-access-status-grid button.is-active { border-color: #22c55e; }
+.houzen-access-status-grid button.is-suspended { border-color: #ef4444; }
+.houzen-selection-count { color: var(--hz-accent); font-size: 0.72rem; font-weight: 700; }
+.houzen-module-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; margin-top: 0.7rem; }
+.houzen-module-grid button.is-selected { border-color: var(--hz-accent); background: var(--hz-accent-soft); }
+.houzen-module-check { display: grid; place-items: center; flex: 0 0 auto; width: 20px; height: 20px; border: 1px solid var(--hz-border); border-radius: 5px; color: #111; }
+.houzen-module-grid button.is-selected .houzen-module-check { border-color: var(--hz-accent); background: var(--hz-accent); }
+.houzen-danger-summary { display: flex; flex-direction: column; padding: 0.8rem; border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 9px; background: rgba(239, 68, 68, 0.08); }
+.houzen-danger-summary span { color: var(--hz-muted); font-size: 0.78rem; }
+
+.houzen-credential-card { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.5rem; padding: 1.2rem; border: 1px solid #2563eb; border-radius: 12px; background: #172554; color: #dbeafe; }
+.houzen-credential-card h2 { margin: 0.35rem 0; color: #fff; font-size: 1rem; }
+.houzen-credential-card p, .houzen-credential-card small { display: block; margin: 0.25rem 0; font-size: 0.78rem; }
+.houzen-credential-card code { display: inline-block; margin: 0.6rem 0; padding: 0.55rem 0.8rem; border-radius: 7px; background: #0f172a; color: #fff; font-size: 1.1rem; user-select: all; }
+.houzen-security-note { display: flex; align-items: flex-start; gap: 0.5rem; margin: 0.8rem 0 0; padding: 0.7rem; border-radius: 8px; background: var(--hz-accent-soft); color: var(--hz-text); font-size: 0.76rem; }
+
+.houzen-theme-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; padding: 1.2rem; }
+.houzen-theme-option { display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem; border: 1px solid var(--hz-border); border-radius: 10px; background: var(--hz-surface-soft); color: var(--hz-text); }
+.houzen-theme-option:hover { border-color: var(--hz-accent); }
+.houzen-theme-option.is-selected { border-color: var(--hz-accent); box-shadow: 0 0 0 2px var(--hz-accent-soft); }
+.houzen-theme-option strong, .houzen-theme-option small { display: block; }
+.houzen-theme-option small { margin-top: 0.2rem; color: var(--hz-muted); font-size: 0.72rem; }
+.houzen-theme-option__preview { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid #303036; border-radius: 9px; background: #111114; color: #f97316; }
+.houzen-theme-option__preview[data-preview-theme="light"] { border-color: #dedee3; background: #fff; color: #ea580c; }
+.houzen-theme-option__check { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--hz-accent); color: #111; }
+
+.houzen-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 65vh; max-width: 520px; margin: auto; text-align: center; }
+.houzen-empty-state__icon { display: grid; place-items: center; width: 54px; height: 54px; border-radius: 12px; background: var(--hz-accent-soft); color: var(--hz-accent); }
+.houzen-empty-state h1 { margin: 1rem 0 0.4rem; color: var(--hz-text); font-size: 1.4rem; }
+.houzen-empty-state p { color: var(--hz-muted); }
+
+.houzen-toast-region { position: fixed; top: 1rem; right: 1rem; z-index: 3000; display: flex; flex-direction: column; gap: 0.55rem; width: min(380px, calc(100vw - 2rem)); pointer-events: none; }
+.houzen-toast { display: flex; align-items: flex-start; gap: 0.65rem; padding: 0.85rem; border: 1px solid #303036; border-left: 3px solid #3b82f6; border-radius: 10px; background: #18181b; color: #f4f4f5; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28); pointer-events: auto; }
+.houzen-toast--success { border-left-color: #22c55e; }
+.houzen-toast--error { border-left-color: #ef4444; }
+.houzen-toast__title, .houzen-toast__message { margin: 0; }
+.houzen-toast__title { font-size: 0.82rem; font-weight: 750; }
+.houzen-toast__message { margin-top: 0.2rem; color: #a1a1aa; font-size: 0.75rem; line-height: 1.4; }
+:root[data-houzen-theme="light"] .houzen-toast { border-color: #dedee3; border-left-color: #3b82f6; background: #ffffff; color: #18181b; box-shadow: 0 18px 45px rgba(39, 39, 42, 0.12); }
+:root[data-houzen-theme="light"] .houzen-toast--success { border-left-color: #16a34a; }
+:root[data-houzen-theme="light"] .houzen-toast--error { border-left-color: #dc2626; }
+:root[data-houzen-theme="light"] .houzen-toast__message { color: #64646f; }
+
+/* Compatibilidade progressiva dos mÃ³dulos existentes com o tema claro. */
+.houzen-shell[data-theme="light"] .text-white { color: var(--hz-text) !important; }
+.houzen-shell[data-theme="light"] .text-secondary { color: var(--hz-muted) !important; }
+.houzen-shell[data-theme="light"] .card { background-color: var(--hz-surface) !important; color: var(--hz-text) !important; }
+.houzen-shell[data-theme="light"] .table-dark { --bs-table-bg: transparent; --bs-table-color: var(--hz-text); --bs-table-hover-color: var(--hz-text); --bs-table-hover-bg: var(--hz-surface-hover); }
+.houzen-shell[data-theme="light"] .form-control,
+.houzen-shell[data-theme="light"] .form-select,
+.houzen-shell[data-theme="light"] .input-group-text { background-color: var(--hz-surface-soft) !important; color: var(--hz-text) !important; border-color: var(--hz-border) !important; }
+.houzen-shell[data-theme="light"] .form-control::placeholder { color: #868691; }
+.houzen-shell[data-theme="light"] .border,
+.houzen-shell[data-theme="light"] .border-bottom,
+.houzen-shell[data-theme="light"] .border-end { border-color: var(--hz-border) !important; }
+
+/* Compatibilidade com estilos inline dos módulos legados durante a migração para tokens. */
+.houzen-shell[data-theme="light"] [style*="#151518" i] { background-color: var(--hz-surface) !important; }
+.houzen-shell[data-theme="light"] [style*="#0F0F11" i] { background-color: var(--hz-surface-soft) !important; }
+.houzen-shell[data-theme="light"] [style*="#FFFFFF" i],
+.houzen-shell[data-theme="light"] [style*="#fff" i] { color: var(--hz-text) !important; }
+
+@media (max-width: 900px) {
+  .houzen-page-header { align-items: flex-start; flex-direction: column; }
+  .houzen-segmented-control { width: 100%; overflow-x: auto; }
+  .houzen-metrics-grid { grid-template-columns: 1fr; }
+  .houzen-panel-toolbar { align-items: stretch; flex-direction: column; }
+  .houzen-search { width: 100%; }
+}
+
+@media (max-width: 680px) {
+  .houzen-sidebar { width: 72px !important; padding-inline: 0.65rem !important; }
+  .houzen-sidebar .houzen-nav-link span,
+  .houzen-sidebar .houzen-sidebar-button span,
+  .houzen-sidebar .houzen-user-summary,
+  .houzen-sidebar > div:first-child > div:first-child > span { display: none; }
+  .houzen-nav-link, .houzen-sidebar-button { justify-content: center; padding-inline: 0.5rem; }
+  .houzen-main { padding: 1rem !important; }
+  .houzen-form-grid, .houzen-module-grid, .houzen-access-status-grid, .houzen-theme-grid { grid-template-columns: 1fr; }
+  .houzen-credential-card { align-items: stretch; flex-direction: column; }
+  .houzen-table th, .houzen-table td { padding-inline: 0.75rem; white-space: nowrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}

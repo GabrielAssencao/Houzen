@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Plus, Search, X, Trash2, Edit2, History, Truck, Shield, Hammer, MapPin } from 'lucide-react';
+import { useNotifications } from '../../components/notificationContext';
 
 export default function FleetModule() {
+  const { notify } = useNotifications();
   const [frota, setFrota] = useState([]);
   const [obras, setObras] = useState([]);
   const [sedes, setSedes] = useState([]);
@@ -149,7 +151,7 @@ export default function FleetModule() {
       setModalDeletarAberto(false);
       carregarDadosDoPatio();
     } catch (err) {
-      alert('Erro ao remover ativo.');
+      notify({ type: 'error', title: 'Ativo não removido', message: err.response?.data?.error || 'Não foi possível remover o ativo.' });
     } finally {
       setCarregandoAction(false);
     }

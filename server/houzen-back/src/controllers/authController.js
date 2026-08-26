@@ -12,12 +12,16 @@ const genericResetMessage = 'Se o e-mail estiver cadastrado, vocÃª receberÃ¡
 
 function publicUser(user, token) {
   const nivel = String(user.nivel || 'comum').toLowerCase().trim();
+  const status = String(user.status || 'ativo').toLowerCase().trim();
   return {
     id: user.id,
     nome: user.nome,
     email: user.email,
     nivel: nivel === 'administrador' ? 'admin' : nivel,
+    status,
     permissoes: normalizePermissions(user.permissoes),
+    theme: ['dark', 'light'].includes(user.theme_preference) ? user.theme_preference : 'dark',
+    accountStatusReason: user.account_status_reason || null,
     mustChangePassword: user.must_change_password === true,
     ...(user.must_change_password === true ? { temporaryPasswordExpiresAt: user.temporary_password_expires_at } : {}),
     ...(token ? { token } : {})
@@ -177,14 +181,17 @@ const login = async (req, res) => {
   const { email, senha } = req.body;
   try {
     const { rows } = await db.query(
-      'SELECT id, nome, email, senha, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version FROM usuarios WHERE lower(email) = lower($1) LIMIT 1',
+      'SELECT id, nome, email, senha, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version, theme_preference, account_status_reason FROM usuarios WHERE lower(email) = lower($1) LIMIT 1',
       [email]
     );
     const user = rows[0];
     const senhaCorreta = user?.senha ? await bcrypt.compare(senha, user.senha).catch(() => false) : false;
     if (!user || !senhaCorreta) return res.status(401).json({ message: 'Credenciais incorretas.' });
     if (String(user.status || '').toLowerCase().trim() !== 'ativo') {
-      return res.status(403).json({ message: 'Sua conta estÃ¡ suspensa ou inativa.' });
+      return res.status(403).json({
+        message: user.account_status_reason || 'Sua conta está suspensa. Entre em contato com o suporte.',
+        code: 'ACCOUNT_SUSPENDED'
+      });
     }
 
     if (user.must_change_password === true && (
@@ -237,7 +244,7 @@ const googleLogin = async (req, res) => {
     }
 
     const { rows } = await db.query(
-      `SELECT id, nome, email, firebase_uid, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version
+      `SELECT id, nome, email, firebase_uid, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version, theme_preference, account_status_reason
        FROM usuarios
        WHERE firebase_uid = $1 OR lower(email) = lower($2)
        LIMIT 1`,
@@ -250,7 +257,7 @@ const googleLogin = async (req, res) => {
       const inserted = await db.query(
         `INSERT INTO usuarios (nome, email, senha, firebase_uid, nivel, status)
          VALUES ($1, $2, $3, $4, 'comum', 'ativo')
-         RETURNING id, nome, email, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version`,
+         RETURNING id, nome, email, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version, theme_preference, account_status_reason`,
         [decoded.name || 'UsuÃ¡rio Google', decoded.email, senhaInutilizavel, decoded.uid]
       );
       user = inserted.rows[0];
@@ -259,7 +266,10 @@ const googleLogin = async (req, res) => {
     }
 
     if (String(user.status || '').toLowerCase().trim() !== 'ativo') {
-      return res.status(403).json({ message: 'Conta inativa.' });
+      return res.status(403).json({
+        message: user.account_status_reason || 'Conta suspensa. Entre em contato com o suporte.',
+        code: 'ACCOUNT_SUSPENDED'
+      });
     }
     return res.json(publicUser(user, signUserToken(user.id, user.session_version)));
   } catch (error) {
@@ -555,13 +565,16 @@ const deletarCronograma = async (req, res) => {
 
 const listarUsuariosAdmin = async (_req, res) => {
   try {
-    const { rows } = await db.query('SELECT id,nome,email,nivel,status,permissoes,must_change_password,temporary_password_expires_at FROM usuarios ORDER BY id DESC');
+    const { rows } = await db.query('SELECT id,nome,email,nivel,status,permissoes,must_change_password,temporary_password_expires_at,theme_preference,account_status_reason FROM usuarios ORDER BY id DESC');
     return res.json(rows.map((user) => publicUser(user)));
   } catch (error) { return handleDatabaseError(res, error, 'Erro ao listar usuÃ¡rios'); }
 };
 
 const criarUsuarioEmpresa = async (req, res) => {
   const { nome, email, senha, nivel = 'empresa', status = 'ativo', permissoes = [] } = req.body;
+  if (nivel === 'admin' && req.user.nivel !== 'superadmin') {
+    return res.status(403).json({ error: 'Somente um SuperAdmin pode criar outro administrador.' });
+  }
   try {
     const senhaHash = await bcrypt.hash(senha, 12);
     await db.query(
@@ -574,25 +587,42 @@ const criarUsuarioEmpresa = async (req, res) => {
 
 const atualizarAcessoUsuario = async (req, res) => {
   const targetId = Number(req.params.id);
-  const { nivel, status, permissoes } = req.body;
-  const targetResult = await db.query('SELECT nivel FROM usuarios WHERE id = $1 LIMIT 1', [targetId]);
-  const target = targetResult.rows[0];
-  if (!target) return res.status(404).json({ error: 'Usuario nao encontrado.' });
-  if (req.user.nivel !== 'superadmin' && (target.nivel === 'superadmin' || nivel === 'superadmin')) {
-    return res.status(403).json({ error: 'Somente um SuperAdmin pode alterar este perfil.' });
-  }
-  const ownRequiredLevel = req.user.nivel === 'administrador' ? 'admin' : req.user.nivel;
-  if (targetId === req.user.id && (nivel !== ownRequiredLevel || status !== 'ativo')) {
-    return res.status(400).json({ error: 'VocÃª nÃ£o pode remover o prÃ³prio acesso administrativo.' });
-  }
+  const { nivel, permissoes, statusReason } = req.body;
+  const status = req.body.status === 'bloqueado' ? 'suspenso' : req.body.status;
   try {
-    const { rowCount } = await db.query(
-      'UPDATE usuarios SET nivel=$1,status=$2,permissoes=$3 WHERE id=$4',
-      [nivel, status, JSON.stringify(permissoes), targetId]
+    const targetResult = await db.query('SELECT id, nivel FROM usuarios WHERE id = $1 LIMIT 1', [targetId]);
+    const target = targetResult.rows[0];
+    if (!target) return res.status(404).json({ error: 'UsuÃ¡rio nÃ£o encontrado.' });
+    if (String(target.nivel).toLowerCase().trim() === 'superadmin') {
+      return res.status(403).json({ error: 'Contas SuperAdmin são protegidas e não podem ser alteradas por esta tela.' });
+    }
+    if (targetId === req.user.id) {
+      return res.status(400).json({ error: 'O acesso do próprio SuperAdmin não pode ser alterado por esta tela.' });
+    }
+
+    const normalizedPermissions = [...new Set(permissoes)];
+    const { rows } = await db.query(
+      `UPDATE usuarios
+       SET nivel=$1, status=$2, permissoes=$3, account_status_reason=$4, session_version=session_version+1
+       WHERE id=$5
+       RETURNING id,nome,email,nivel,status,permissoes,must_change_password,temporary_password_expires_at,theme_preference,account_status_reason`,
+      [nivel, status, JSON.stringify(normalizedPermissions), status === 'ativo' ? null : statusReason.trim(), targetId]
     );
-    if (!rowCount) return res.status(404).json({ error: 'UsuÃ¡rio nÃ£o encontrado.' });
-    return res.json({ message: 'Acessos atualizados.' });
+    return res.json({ message: 'Acessos atualizados e sessões anteriores revogadas.', user: publicUser(rows[0]) });
   } catch (error) { return handleDatabaseError(res, error, 'Erro ao atualizar acessos'); }
+};
+
+const updateThemePreference = async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `UPDATE usuarios SET theme_preference=$1 WHERE id=$2
+       RETURNING id,nome,email,nivel,status,permissoes,must_change_password,temporary_password_expires_at,theme_preference,account_status_reason`,
+      [req.body.theme, req.user.id]
+    );
+    return res.json(publicUser(rows[0]));
+  } catch (error) {
+    return handleDatabaseError(res, error, 'Erro ao salvar preferência de tema');
+  }
 };
 
 const excluirUsuario = async (req, res) => {
@@ -600,8 +630,8 @@ const excluirUsuario = async (req, res) => {
   const targetResult = await db.query('SELECT nivel FROM usuarios WHERE id = $1 LIMIT 1', [targetId]);
   const target = targetResult.rows[0];
   if (!target) return res.status(404).json({ error: 'Usuario nao encontrado.' });
-  if (target.nivel === 'superadmin' && req.user.nivel !== 'superadmin') {
-    return res.status(403).json({ error: 'Somente um SuperAdmin pode excluir este perfil.' });
+  if (String(target.nivel).toLowerCase().trim() === 'superadmin') {
+    return res.status(403).json({ error: 'Contas SuperAdmin são protegidas e não podem ser excluídas.' });
   }
   if (targetId === req.user.id) return res.status(400).json({ error: 'VocÃª nÃ£o pode excluir a prÃ³pria conta.' });
   try {
@@ -799,7 +829,7 @@ const changeTemporaryPassword = async (req, res) => {
       `UPDATE usuarios
        SET senha = $1, must_change_password = false, temporary_password_expires_at = NULL, session_version = session_version + 1
        WHERE id = $2
-       RETURNING id, nome, email, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version`,
+       RETURNING id, nome, email, nivel, status, permissoes, must_change_password, temporary_password_expires_at, session_version, theme_preference, account_status_reason`,
       [passwordHash, req.user.id]
     );
     await db.query('DELETE FROM password_reset_tokens WHERE usuario_id = $1', [req.user.id]);
@@ -815,6 +845,7 @@ module.exports = {
   resolvePasswordResetRequest,
   rejectPasswordResetRequest,
   changeTemporaryPassword,
+  updateThemePreference,
   registrarUsuarioTeste,
   forgotPassword,
   login,

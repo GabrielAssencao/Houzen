@@ -5,6 +5,10 @@ import axios from 'axios';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/login';
 import ChangeTemporaryPassword from './pages/ChangeTemporaryPassword';
+import SettingsPage from './pages/SettingsPage';
+import AccessUnavailable from './pages/AccessUnavailable';
+import { firstAllowedPath, hasModuleAccess, isAdminUser } from './config/modules';
+import { useNotifications } from './components/notificationContext';
 
 // Layout e Sub-páginas do Dashboard
 import DashboardLayout from './components/DashboardLayout';
@@ -26,14 +30,47 @@ const RotaProtegida = ({ usuario, children }) => {
   return children;
 };
 
+const RotaModulo = ({ usuario, moduleId, children }) => {
+  if (!hasModuleAccess(usuario, moduleId)) {
+    return <Navigate to={firstAllowedPath(usuario)} replace />;
+  }
+  return children;
+};
+
 export default function App() {
   const [usuario, setUsuario] = useState(null);
   const [carregando, setCarregando] = useState(true);
+  const { notify } = useNotifications();
+
+  useEffect(() => {
+    if (usuario) {
+      document.documentElement.dataset.houzenTheme = usuario.theme || 'dark';
+    } else {
+      delete document.documentElement.dataset.houzenTheme;
+    }
+    return () => { delete document.documentElement.dataset.houzenTheme; };
+  }, [usuario]);
 
   // Verifica se é admin
   const isUserAdmin = () => {
-    return ['admin', 'administrador', 'superadmin'].includes(usuario?.nivel);
+    return isAdminUser(usuario);
   };
+
+  useEffect(() => {
+    const handleAuthError = (event) => {
+      if (!localStorage.getItem('@Houzen:user')) return;
+      localStorage.removeItem('@Houzen:user');
+      delete axios.defaults.headers.common.Authorization;
+      setUsuario(null);
+      notify({
+        type: event.detail?.code === 'ACCOUNT_SUSPENDED' ? 'error' : 'info',
+        title: event.detail?.code === 'ACCOUNT_SUSPENDED' ? 'Acesso suspenso' : 'Sessão encerrada',
+        message: event.detail?.message || 'Entre novamente para continuar.'
+      });
+    };
+    window.addEventListener('houzen:auth-error', handleAuthError);
+    return () => window.removeEventListener('houzen:auth-error', handleAuthError);
+  }, [notify]);
 
   useEffect(() => {
     const verificarSessao = async () => {
@@ -41,7 +78,7 @@ export default function App() {
       if (usuarioLogado) {
         try {
           const user = JSON.parse(usuarioLogado);
-          if (!user.token) throw new Error('SessÃ£o sem token.');
+          if (!user.token) throw new Error('Sessão sem token.');
           axios.defaults.headers.common.Authorization = `Bearer ${user.token}`;
           const apiUrl = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
           const { data } = await axios.get(`${apiUrl}/api/auth/session`);
@@ -67,9 +104,40 @@ export default function App() {
     return () => window.removeEventListener('storage', escutarStorage);
   }, []);
 
+  useEffect(() => {
+    const responseInterceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        const code = error.response?.data?.code;
+        const hasStoredSession = Boolean(localStorage.getItem('@Houzen:user'));
+        if (hasStoredSession && (error.response?.status === 401 || code === 'ACCOUNT_SUSPENDED')) {
+          localStorage.removeItem('@Houzen:user');
+          delete axios.defaults.headers.common.Authorization;
+          setUsuario(null);
+          notify({
+            type: code === 'ACCOUNT_SUSPENDED' ? 'error' : 'info',
+            title: code === 'ACCOUNT_SUSPENDED' ? 'Acesso suspenso' : 'Sessão encerrada',
+            message: error.response?.data?.error || 'Entre novamente para continuar.'
+          });
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => axios.interceptors.response.eject(responseInterceptor);
+  }, [notify]);
+
   const handleLoginSucesso = (dadosUsuario) => {
     setUsuario(dadosUsuario);
     axios.defaults.headers.common.Authorization = `Bearer ${dadosUsuario.token}`;
+  };
+
+  const handleUserUpdated = (dadosUsuario) => {
+    setUsuario((current) => {
+      const updated = { ...current, ...dadosUsuario, token: dadosUsuario.token || current?.token };
+      localStorage.setItem('@Houzen:user', JSON.stringify(updated));
+      if (updated.token) axios.defaults.headers.common.Authorization = `Bearer ${updated.token}`;
+      return updated;
+    });
   };
 
   const handleLogout = () => {
@@ -116,15 +184,17 @@ export default function App() {
         <Route 
           element={
             <RotaProtegida usuario={usuario}>
-              <DashboardLayout usuario={usuario} onLogout={handleLogout} />
+              <DashboardLayout usuario={usuario} onLogout={handleLogout} onUserUpdated={handleUserUpdated} />
             </RotaProtegida>
           }
         >
-          <Route path="/dashboard" element={<DashboardHome />} />
-          <Route path="/dashboard/rh" element={<HRModule />} />
-          <Route path="/dashboard/suprimentos" element={<SuppliesModule />} />
-          <Route path="/dashboard/frota" element={<FleetModule />} />
-          <Route path="/dashboard/cronograma" element={<TimelineModule />} />
+          <Route path="/dashboard" element={<RotaModulo usuario={usuario} moduleId="dashboard"><DashboardHome /></RotaModulo>} />
+          <Route path="/dashboard/rh" element={<RotaModulo usuario={usuario} moduleId="rh"><HRModule /></RotaModulo>} />
+          <Route path="/dashboard/suprimentos" element={<RotaModulo usuario={usuario} moduleId="suprimentos"><SuppliesModule /></RotaModulo>} />
+          <Route path="/dashboard/frota" element={<RotaModulo usuario={usuario} moduleId="frota"><FleetModule /></RotaModulo>} />
+          <Route path="/dashboard/cronograma" element={<RotaModulo usuario={usuario} moduleId="cronograma"><TimelineModule /></RotaModulo>} />
+          <Route path="/dashboard/settings" element={<SettingsPage />} />
+          <Route path="/dashboard/access-unavailable" element={<AccessUnavailable />} />
           
           <Route 
             path="/dashboard/admin" 

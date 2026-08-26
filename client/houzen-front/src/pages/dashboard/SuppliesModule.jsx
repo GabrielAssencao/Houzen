@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Search, X, Trash2, Edit2, AlertTriangle, Box, Warehouse, Building, Bell } from 'lucide-react';
+import ModalDialog from '../../components/ModalDialog';
+import { useNotifications } from '../../components/notificationContext';
 
 export default function SuppliesModule() {
+  const { notify } = useNotifications();
   const [materiais, setMateriais] = useState([]);
   const [sedes, setSedes] = useState([]);
   const [obras, setObras] = useState([]);
@@ -15,6 +18,7 @@ export default function SuppliesModule() {
   
   // Notificações de Baixa Automatizada
   const [notificacoes, setNotificacoes] = useState([]);
+  const [deleteCandidate, setDeleteCandidate] = useState(null);
 
   // Modais
   const [modalAberto, setModalAberto] = useState(false);
@@ -135,17 +139,21 @@ export default function SuppliesModule() {
       setNomeNovaSede('');
       carregarDadosEstoque();
     } catch (err) {
-      alert('Erro ao criar sede.');
+      notify({ type: 'error', title: 'Sede não cadastrada', message: err.response?.data?.error || 'Não foi possível criar a sede.' });
     }
   };
 
-  const handleDeletar = async (id) => {
-    if (!window.confirm('Deseja excluir este suprimento?')) return;
+  const handleDeletar = async () => {
+    if (!deleteCandidate) return;
+    setCarregandoAction(true);
     try {
-      await axios.delete(`${API_URL}/api/auth/suprimentos/${id}`, getAuthHeader());
-      carregarDadosEstoque();
+      await axios.delete(`${API_URL}/api/auth/suprimentos/${deleteCandidate.id}`, getAuthHeader());
+      setDeleteCandidate(null);
+      await carregarDadosEstoque();
     } catch (err) {
-      alert('Erro ao deletar item.');
+      notify({ type: 'error', title: 'Suprimento não removido', message: err.response?.data?.error || 'Não foi possível excluir o item.' });
+    } finally {
+      setCarregandoAction(false);
     }
   };
 
@@ -309,7 +317,7 @@ export default function SuppliesModule() {
                     <td className="text-center">
                       {/* BOTOES DE AÇÃO - EDITAR E DELETAR */}
                       <button onClick={() => handleEditarClick(mat)} className="btn p-1 border-0 bg-transparent text-secondary icon-edit-hover shadow-none me-2" title="Editar"><Edit2 size={15} /></button>
-                      <button onClick={() => handleDeletar(mat.id)} className="btn p-1 border-0 bg-transparent text-secondary icon-delete-hover shadow-none" title="Excluir"><Trash2 size={15} /></button>
+                      <button onClick={() => setDeleteCandidate(mat)} className="btn p-1 border-0 bg-transparent text-secondary icon-delete-hover shadow-none" title="Excluir"><Trash2 size={15} /></button>
                     </td>
                   </tr>
                 ))}
@@ -410,6 +418,16 @@ export default function SuppliesModule() {
           </div>
         </div>
       )}
+
+      <ModalDialog
+        open={Boolean(deleteCandidate)}
+        onClose={() => !carregandoAction && setDeleteCandidate(null)}
+        title="Excluir suprimento?"
+        description="O item será removido permanentemente do estoque."
+        actions={<><button type="button" onClick={() => setDeleteCandidate(null)} disabled={carregandoAction} className="houzen-button-secondary">Cancelar</button><button type="button" onClick={handleDeletar} disabled={carregandoAction} className="houzen-button-danger">{carregandoAction && <span className="spinner-border spinner-border-sm" />} Excluir item</button></>}
+      >
+        {deleteCandidate && <div className="houzen-danger-summary"><strong>{deleteCandidate.nome}</strong><span>{deleteCandidate.categoria}</span></div>}
+      </ModalDialog>
 
       <style>{`
         .icon-delete-hover:hover { color: #EF4444 !important; }

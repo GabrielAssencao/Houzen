@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import axios from 'axios';
+import { useNotifications } from '../../components/notificationContext';
 
 export default function FormSede({ usuarioId, onSuccess }) {
+  const { notify } = useNotifications();
   const [data, setData] = useState({ nome: '' });
   const [loading, setLoading] = useState(false);
   
@@ -29,12 +31,12 @@ export default function FormSede({ usuarioId, onSuccess }) {
         usuario_id: usuarioId 
       }, getAuthHeader());
       
-      alert('Sede cadastrada!');
+      notify({ type: 'success', title: 'Sede cadastrada', message: 'A sede foi vinculada à empresa.' });
       onSuccess();
       setData({ nome: '' });
     } catch (err) {
       console.error(err);
-      alert('Erro ao cadastrar sede.');
+      notify({ type: 'error', title: 'Sede não cadastrada', message: 'Revise os dados e tente novamente.' });
     } finally {
       setLoading(false);
     }

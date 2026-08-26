@@ -9,6 +9,8 @@ Plataforma full-stack para gerenciamento de obras, equipes, suprimentos, frotas 
 - **Banco de dados:** PostgreSQL gerenciado pelo Supabase e acessado exclusivamente pela API.
 - **Autenticação com Google:** Firebase Authentication, com validação do token de ID no backend.
 - **Recuperação de acesso:** fluxo manual auditável, processado por um perfil `superadmin`.
+- **Controle de planos:** permissões por módulo e suspensão imediata de contas, aplicadas no backend.
+- **Aparência:** tema claro ou escuro salvo individualmente no perfil de cada usuário.
 
 ```text
 client/houzen-front       React/Vite
@@ -21,6 +23,8 @@ server/houzen-back/database/supabase.sql
 ### 1. Banco de dados no Supabase
 
 No SQL Editor do Supabase, execute o arquivo [`server/houzen-back/database/supabase.sql`](server/houzen-back/database/supabase.sql). A migração é idempotente: preserva as tabelas e os registros existentes, converte senhas legadas em hashes seguros e adiciona os controles necessários.
+
+Para atualizar uma instalação que já está em produção, execute apenas as migrações ainda não aplicadas da pasta [`server/houzen-back/database/migrations`](server/houzen-back/database/migrations), em ordem. A migração `20260826_user_access_and_theme.sql` adiciona as preferências de tema e o motivo de suspensão sem bloquear nem reescrever registros existentes.
 
 Para executar um backend persistente no Render, abra a opção **Connect** no Supabase e copie a URL de conexão do **Session pooler**, na porta `5432`. A conexão direta geralmente exige suporte a IPv6. Nunca coloque a variável `DATABASE_URL` no frontend nem a publique no GitHub.
 
@@ -81,6 +85,14 @@ O contato informado no formulário público não comprova a identidade do solici
 
 As variáveis `RESEND_API_KEY` e `RESEND_FROM` permanecem reservadas para uma futura integração de notificações e não são necessárias para esse fluxo.
 
+## Planos, permissões e suspensão
+
+Somente o `superadmin` pode alterar o perfil, os módulos contratados e o status de uma conta. As permissões são verificadas tanto na navegação quanto em cada grupo de endpoints da API; esconder um item do menu não é usado como barreira de segurança.
+
+Ao alterar módulos ou suspender uma conta, as sessões anteriores do usuário são revogadas. Contas suspensas recebem uma mensagem definida pelo SuperAdmin, que pode explicar uma pendência financeira ou outro motivo administrativo. Reativar a conta permite um novo login com os módulos atualmente contratados.
+
+Cada perfil pode escolher tema claro ou escuro em **Configurações**. A preferência fica salva no banco e é aplicada somente ao ambiente autenticado; a landing page preserva sua identidade visual original.
+
 ## Publicação
 
 ### API no Render
@@ -91,6 +103,8 @@ As variáveis `RESEND_API_KEY` e `RESEND_FROM` permanecem reservadas para uma fu
 - **Start Command:** `npm start`
 - **Health Check Path:** `/health`
 - **Variáveis de ambiente:** copie as variáveis de `.env.example` e preencha-as com os valores de produção.
+
+Em atualizações com migração, execute primeiro o SQL no Supabase, depois publique a API e por último o frontend. Essa ordem mantém o backend compatível durante a implantação.
 
 ### Frontend na Vercel
 
@@ -106,6 +120,8 @@ Adicione o domínio final da Vercel à variável `FRONTEND_URLS` no backend e à
 - A API não confia em identificadores de usuário enviados pelo navegador.
 - As rotas privadas exigem um JWT válido.
 - As rotas administrativas verificam o nível de acesso do usuário no banco de dados.
+- As permissões de módulo são verificadas pelo backend em todas as operações correspondentes.
+- Somente o SuperAdmin pode alterar planos, suspender contas ou excluir usuários; a mudança revoga sessões anteriores.
 - O token do Firebase é verificado por assinatura, emissor, audiência e prazo de validade.
 - As consultas validam a propriedade dos recursos para impedir o acesso entre contas diferentes.
 - As senhas são protegidas com bcrypt.

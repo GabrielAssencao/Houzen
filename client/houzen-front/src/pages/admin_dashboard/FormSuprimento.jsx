@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Save } from 'lucide-react';
+import { useNotifications } from '../../components/notificationContext';
 
 export default function FormSuprimento({ usuarioId, obras, sedes, onSuccess }) {
+  const { notify } = useNotifications();
   const [data, setData] = useState({ 
     obra_id: '', 
     sede_id: '', 
@@ -36,12 +38,12 @@ export default function FormSuprimento({ usuarioId, obras, sedes, onSuccess }) {
         usuario_id: usuarioId 
       }, getAuthHeader());
       
-      alert('Suprimento adicionado com sucesso!');
+      notify({ type: 'success', title: 'Suprimento adicionado', message: 'O item foi vinculado ao destino selecionado.' });
       onSuccess();
       setData({ obra_id: '', sede_id: '', nome: '', qtd: '', preco: '' });
     } catch (err) {
       console.error(err);
-      alert('Erro ao salvar suprimento');
+      notify({ type: 'error', title: 'Suprimento não salvo', message: 'Revise os dados e tente novamente.' });
     } finally {
       setLoading(false);
     }

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Plus, Search, X, Trash2, Edit2, AlertTriangle, UserX, Briefcase, Users, UserCheck, UserPlus } from 'lucide-react';
+import { useNotifications } from '../../components/notificationContext';
 
 export default function HRModule() {
+  const { notify } = useNotifications();
   const [funcionarios, setFuncionarios] = useState([]);
   const [obras, setObras] = useState([]);
   
@@ -123,7 +125,7 @@ export default function HRModule() {
       setModalDeletarAberto(false);
       carregarDadosDoSistema();
     } catch (error) {
-      alert('Erro ao excluir funcionário.');
+      notify({ type: 'error', title: 'Funcionário não removido', message: error.response?.data?.error || 'Não foi possível excluir o funcionário.' });
     } finally {
       setCarregandoSalvar(false);
     }

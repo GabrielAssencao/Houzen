@@ -1,16 +1,32 @@
-# React + Vite
+# Frontend Houzen
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Interface React/Vite da plataforma Houzen. O frontend consome exclusivamente a API Express e não acessa credenciais privadas nem o banco PostgreSQL diretamente.
 
-Currently, two official plugins are available:
+## Desenvolvimento local
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+Copie `.env.example` para `.env` e configure `VITE_API_URL` e as chaves públicas do Firebase Web. Variáveis com prefixo `VITE_` ficam visíveis no navegador e não devem conter segredos.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Verificações
 
-## Expanding the ESLint configuration
+```bash
+npm run lint
+npm run build
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Deploy na Vercel
+
+- Root Directory: `client/houzen-front`
+- Framework: Vite
+- Build Command: `npm run build`
+- Output Directory: `dist`
+
+O arquivo `vercel.json` mantém o fallback da SPA para rotas como `/login`, `/dashboard` e `/dashboard/settings`.
+
+## Temas
+
+O tema claro ou escuro é salvo no perfil por meio da API. Ele é aplicado somente ao layout autenticado; a landing page mantém o tema visual original.

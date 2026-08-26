@@ -1,5 +1,7 @@
 const { body, param, validationResult } = require('express-validator');
 
+const allowedModules = ['dashboard', 'obras', 'rh', 'suprimentos', 'frota', 'cronograma'];
+
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -161,15 +163,27 @@ const validarUsuarioEmpresa = [
   body('nivel').optional().isIn(['comum', 'admin', 'empresa', 'operador']),
   body('status').optional().isIn(['ativo', 'inativo', 'suspenso']),
   body('permissoes').optional().isArray({ max: 20 }),
-  body('permissoes.*').optional().isString().isLength({ min: 1, max: 50 }),
+  body('permissoes.*').optional().isIn(allowedModules).withMessage('módulo inválido'),
   handleValidationErrors
 ];
 
 const validarAcessoUsuario = [
-  body('nivel').isIn(['comum', 'admin', 'superadmin', 'empresa', 'operador']),
-  body('status').isIn(['ativo', 'inativo', 'suspenso']),
+  body('nivel').isIn(['comum', 'admin', 'empresa', 'operador']),
+  body('status').isIn(['ativo', 'inativo', 'suspenso', 'bloqueado']),
+  body('statusReason').optional({ nullable: true }).trim().isLength({ max: 255 }).withMessage('motivo muito longo'),
   body('permissoes').isArray({ max: 20 }),
-  body('permissoes.*').isString().isLength({ min: 1, max: 50 }),
+  body('permissoes.*').isIn(allowedModules).withMessage('módulo inválido'),
+  body().custom((payload) => {
+    if (payload.status !== 'ativo' && String(payload.statusReason || '').trim().length < 5) {
+      throw new Error('informe o motivo do bloqueio da conta');
+    }
+    return true;
+  }),
+  handleValidationErrors
+];
+
+const validarTema = [
+  body('theme').isIn(['dark', 'light']).withMessage('tema inválido'),
   handleValidationErrors
 ];
 
@@ -237,6 +251,7 @@ module.exports = {
   validarStatusCronograma,
   validarUsuarioEmpresa,
   validarAcessoUsuario,
+  validarTema,
   validarAdminObra,
   validarAdminSede,
   validarAdminFuncionario,

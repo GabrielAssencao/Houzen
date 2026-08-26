@@ -15,7 +15,7 @@ const expectedTables = [
 ];
 
 const expectedColumns = {
-  usuarios: ['must_change_password', 'session_version', 'temporary_password_expires_at'],
+  usuarios: ['account_status_reason', 'must_change_password', 'session_version', 'temporary_password_expires_at', 'theme_preference'],
   password_reset_requests: ['contact_type', 'contact_value', 'status', 'verification_note']
 };
 

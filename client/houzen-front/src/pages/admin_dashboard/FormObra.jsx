@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Save } from 'lucide-react';
+import { useNotifications } from '../../components/notificationContext';
 
 export default function FormObra({ usuarioId, onSuccess }) {
+  const { notify } = useNotifications();
   const [data, setData] = useState({ nome: '', status: 'Em Andamento', receitas: '', despesas: '' });
   const [loading, setLoading] = useState(false);
   
@@ -35,12 +37,12 @@ export default function FormObra({ usuarioId, onSuccess }) {
         usuario_id: usuarioId 
       }, getAuthHeader());
       
-      alert('Obra registrada com sucesso!');
+      notify({ type: 'success', title: 'Obra registrada', message: 'A obra foi vinculada à empresa selecionada.' });
       onSuccess();
       setData({ nome: '', status: 'Em Andamento', receitas: '', despesas: '' });
     } catch (err) {
       console.error(err);
-      alert('Erro ao registrar obra');
+      notify({ type: 'error', title: 'Obra não registrada', message: 'Revise os dados e tente novamente.' });
     } finally {
       setLoading(false);
     }

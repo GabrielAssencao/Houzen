@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import axios from 'axios';
+import { useNotifications } from '../../components/notificationContext';
 
 export default function FormFuncionario({ usuarioId, obras, onSuccess }) {
+  const { notify } = useNotifications();
   const [data, setData] = useState({ obra_id: '', nome: '', cargo: '', salario: '', status: 'Ativo' });
   const [loading, setLoading] = useState(false);
   const inputStyle = { backgroundColor: '#0F0F11', color: '#FFFFFF', border: '1px solid #333' };
@@ -28,12 +30,12 @@ export default function FormFuncionario({ usuarioId, obras, onSuccess }) {
         usuario_id: usuarioId 
       }, getAuthHeader());
       
-      alert('Funcionário registrado!');
+      notify({ type: 'success', title: 'Funcionário registrado', message: 'O profissional foi vinculado à empresa.' });
       onSuccess();
       setData({ obra_id: '', nome: '', cargo: '', salario: '', status: 'Ativo' });
     } catch (err) {
       console.error(err);
-      alert('Erro ao registrar funcionário.');
+      notify({ type: 'error', title: 'Funcionário não registrado', message: 'Revise os dados e tente novamente.' });
     } finally {
       setLoading(false);
     }
