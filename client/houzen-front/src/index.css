@@ -1,0 +1,11 @@
+/* Efeito de iluminação nos cards de funcionalidades */
+.card-hover-effect:hover {
+  border-color: rgba(249, 115, 22, 0.25) !important;
+  box-shadow: 0 10px 30px rgba(249, 115, 22, 0.04);
+  transform: translateY(-4px);
+}
+
+/* Transição de cores suave para links da navbar */
+.hover-white:hover {
+  color: #ffffff !important;
+}

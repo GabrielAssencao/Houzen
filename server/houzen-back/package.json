@@ -1,0 +1,31 @@
+{
+  "name": "houzen-back",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "check": "node --check src/index.js && node --check src/controllers/authController.js && node --check src/middleware/auth.js && node --check src/middleware/validators.js && node --check src/routes/authRoutes.js",
+    "check:db": "node scripts/check-db.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.4.1",
+    "express-validator": "^7.2.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1",
+    "resend": "^6.12.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
